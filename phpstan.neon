@@ -1,0 +1,15 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    # Niveau de départ raisonnable (Conventions.md : >= 5, montée progressive)
+    level: 5
+
+    # Périmètre analysé : code applicatif, routes, migrations/factories, tests.
+    # vendor/, storage/, bootstrap/cache/, node_modules/ ne sont pas listés
+    # => jamais analysés (fichiers générés ou tiers).
+    paths:
+        - app/
+        - routes/
+        - database/
+        - tests/
