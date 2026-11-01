@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>Cas limites</title>
+    <link>https://www.exemple.fr</link>
+    <description>Articles incomplets et caractères spéciaux</description>
+    <item>
+      <title>Caractères spéciaux éàü ñ — « guillemets » &amp; 🌍</title>
+      <link>https://www.exemple.fr/speciaux</link>
+      <guid isPermaLink="false">spec-1</guid>
+      <pubDate>Thu, 30 Oct 2026 09:00:00 GMT</pubDate>
+      <description>Texte avec entités &lt;b&gt;balise&lt;/b&gt; et accents.</description>
+    </item>
+    <item>
+      <title>Date illisible</title>
+      <link>https://www.exemple.fr/date-invalide</link>
+      <guid isPermaLink="false">spec-2</guid>
+      <pubDate>pas-une-date-du-tout</pubDate>
+    </item>
+    <item>
+      <link>https://www.exemple.fr/sans-titre</link>
+      <guid isPermaLink="false">spec-3</guid>
+      <description>Article sans titre.</description>
+    </item>
+    <item>
+      <title>Article minimal</title>
+      <guid isPermaLink="false">spec-4</guid>
+    </item>
+  </channel>
+</rss>

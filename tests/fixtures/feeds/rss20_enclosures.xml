@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Enclosures</title>
+    <link>https://www.exemple.fr</link>
+    <description>L'enclosure ne doit jamais devenir l'URL de l'article</description>
+    <item>
+      <title>link + enclosure</title>
+      <link>https://www.exemple.fr/a1</link>
+      <guid isPermaLink="false">enc-1</guid>
+      <enclosure url="https://media.exemple.fr/a1.mp3" type="audio/mpeg" length="123"/>
+    </item>
+    <item>
+      <title>enclosure sans link</title>
+      <guid isPermaLink="false">enc-2</guid>
+      <enclosure url="https://media.exemple.fr/a2.mp3" type="audio/mpeg" length="456"/>
+    </item>
+    <item>
+      <title>guid permalien + enclosure</title>
+      <guid isPermaLink="true">https://www.exemple.fr/a3</guid>
+      <enclosure url="https://media.exemple.fr/a3.mp3" type="audio/mpeg" length="789"/>
+    </item>
+  </channel>
+</rss>

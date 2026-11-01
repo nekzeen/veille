@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Variantes de guid</title>
+    <link>https://www.exemple.fr</link>
+    <description>Cas isPermaLink</description>
+    <item>
+      <title>guid permalien avec link</title>
+      <link>https://www.exemple.fr/a1</link>
+      <guid isPermaLink="true">https://www.exemple.fr/a1</guid>
+    </item>
+    <item>
+      <title>guid non permalien avec link</title>
+      <link>https://www.exemple.fr/a2</link>
+      <guid isPermaLink="false">opaque-id-77</guid>
+    </item>
+    <item>
+      <title>guid sans attribut</title>
+      <link>https://www.exemple.fr/a3</link>
+      <guid>https://www.exemple.fr/a3</guid>
+    </item>
+    <item>
+      <title>article sans guid</title>
+      <link>https://www.exemple.fr/a4</link>
+    </item>
+    <item>
+      <title>guid permalien sans link</title>
+      <guid isPermaLink="true">https://www.exemple.fr/a5</guid>
+    </item>
+    <item>
+      <title>guid non permalien sans link</title>
+      <guid isPermaLink="false">opaque-sans-lien</guid>
+    </item>
+  </channel>
+</rss>

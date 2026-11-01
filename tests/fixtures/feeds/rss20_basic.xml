@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"
+     xmlns:dc="http://purl.org/dc/elements/1.1/"
+     xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Flux d'exemple</title>
+    <link>https://www.exemple.fr</link>
+    <description>Le flux de démonstration</description>
+    <language>fr-FR</language>
+    <item>
+      <title>Article complet</title>
+      <link>https://www.exemple.fr/articles/1</link>
+      <guid isPermaLink="true">https://www.exemple.fr/articles/1</guid>
+      <pubDate>Thu, 30 Oct 2026 10:00:00 +0200</pubDate>
+      <dc:creator>Alice Martin</dc:creator>
+      <description>Résumé du premier article.</description>
+      <content:encoded><![CDATA[<p>Corps <strong>complet</strong> de l'article.</p>]]></content:encoded>
+    </item>
+    <item>
+      <title>Deuxième article</title>
+      <link>https://www.exemple.fr/articles/2</link>
+      <guid isPermaLink="false">item-42-abc</guid>
+      <pubDate>Thu, 30 Oct 2026 08:00:00 +0200</pubDate>
+      <description>Second résumé.</description>
+    </item>
+  </channel>
+</rss>
