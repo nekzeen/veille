@@ -18,7 +18,7 @@ catégories, alertes e-mail. **Pas** de logique pédagogique
 | Site | `https://veille.gaelmorvan.fr` |
 | PHP | CLI 8.3.36 ; FPM 8.3 via socket `/var/lib/php8.2-fpm/web18.sock` (nom historique) |
 | Stack | Laravel 12, Blade + Alpine.js + Tailwind, Vite |
-| BDD | MariaDB 10.11 (`DB_*` dans `.env`) — **aucune base n'existe encore** |
+| BDD | MariaDB 10.11 (`DB_*` dans `.env`) — `veille_db` existe (10 migrations métier en attente de validation) ; `veille_test` opérationnelle (`-c phpunit.mariadb.xml`) |
 | Queue/cache | driver `database` — **pas** de Redis (présent mais partagé/non retenu) |
 | Mail | sendmail (`/usr/sbin/sendmail`, Postfix local) |
 | Collecte | SimplePie + `php artisan schedule:run` via cron ISPConfig |

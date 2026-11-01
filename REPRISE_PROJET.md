@@ -1,7 +1,8 @@
 # Reprise du projet Veille
 
 > Document d'accueil pour une nouvelle session de développement.
-> État vérifié le 2026-11-01 au commit `9e47ca1` (branche `main`).
+> État vérifié le 2026-11-01 au commit `c1588e4` (branche `main`) ;
+> travaux M1.10 consolidés par la série de commits M1.10.3.3 (§8).
 > **À lire après `AGENTS.md`** — celui-ci reste la référence des
 > interdictions et règles non négociables.
 
@@ -39,16 +40,22 @@ secure/HttpOnly).
 | Queue + cache | driver `database` (pas de Redis — présent mais partagé, non retenu) |
 | Scheduler | un seul cron ISPConfig → `php artisan schedule:run` ; aucun worker persistant |
 | Mail | sendmail (Postfix local) prévu en prod — `.env` actuel encore sur `log` |
-| Parsing flux | **SimplePie** — choix validé, paquet **pas encore installé** |
+| Parsing flux | **SimplePie 1.9.0** — installé (`composer.json`) |
 | Organisation cible | Actions / Services / Jobs / Enums (décrite dans Architecture.md §4) |
 
 **Réellement présent aujourd'hui** : scaffolding Laravel + Breeze,
 modèles `Source`/`UserSource`, `SourceSubscriptionService`,
 `UserSourcePolicy`, contrôleurs `CatalogueController`/`UserSourceController`,
-`StorePersonalSourceRequest`, vues `sources/*`, factories et tests.
-**Pas encore implémentés** : collecte de flux, jobs, scheduler actif
-(`routes/console.php` est le squelette par défaut), matching,
-notifications, dossiers `Actions/`/`Jobs/`/`Enums/`/`Notifications/`.
+`StorePersonalSourceRequest`, vues `sources/*`, factories et tests,
+**collecteur RSS/Atom** : `app/Services/Feed/`
+(`SecureFeedClient` anti-SSRF, `FeedUrlValidator`, `IpAddressPolicy`,
+`DnsResolver`, `SimplePieFeedParser`, interfaces, DTO, exceptions) +
+`app/Enums/FeedFormat.php`.
+**Pas encore implémentés** : orchestration de la collecte
+(`ArticleUpsertService` §4.B, `ArticleUrlNormalizer` B.2 — reportés à
+M1.10.4), jobs, scheduler actif (`routes/console.php` est le squelette
+par défaut), matching, notifications, dossiers `Actions/`/`Jobs/`/
+`Notifications/`.
 
 ## 3. Hébergement
 
@@ -127,7 +134,8 @@ Décisions structurantes :
 | Ajout de source personnelle par URL (validation http/https, normalisation B.1, réutilisation de la source technique, gestion des doublons concurrents SQLSTATE 23000 / MariaDB 1062 / SQLite 19) | ✅ |
 | Désabonnement transactionnel + `orphaned_at` | ✅ |
 | Isolation (Policy `UserSource`, routes `auth`) | ✅ |
-| **Collecte effective des flux (fetch, parse, articles)** | ❌ non implémentée (M1.10) |
+| **Collecte effective des flux** : client HTTP `SecureFeedClient` + parseur `SimplePieFeedParser` | ✅ livrés (M1.10.2.x–M1.10.3.2) |
+| Orchestration collecte (`ArticleUpsertService`, `FetchFeedJob`, `feeds:fetch`, scheduler) | ❌ non implémentée (M1.10.4+) |
 | Veilles, mots-clés, matching, favoris/notes/catégories, alertes | ❌ postérieurs |
 | Déploiement `/web` + cron scheduler | ❌ prérequis manuels ISPConfig |
 
@@ -137,9 +145,10 @@ Résultats vérifiés (ne pas extrapoler) :
 
 - **25 tests initiaux** (Breeze : auth, profil, exemples) — validés
   SQLite et MariaDB en M1.8.
-- **39 tests** (101 assertions) après le module Sources — verts sur
-  SQLite (`php artisan test`, commit `9e47ca1`) et validés sur MariaDB
-  `veille_test` (`-c phpunit.mariadb.xml`) en M1.9.3.
+- **188 tests** (421 assertions) après le collecteur RSS/Atom
+  (M1.10.2.x–M1.10.3.2) — verts sur SQLite (`php artisan test`) et sur
+  MariaDB `veille_test` (`-c phpunit.mariadb.xml`) ; bi-moteur
+  vérifié le 2026-11-01 sur la série M1.10.3.3.
 - `./vendor/bin/phpstan analyse` : **aucune erreur** (Larastan).
 - `./vendor/bin/pint --test` : **passed**.
 - Les migrations métier n'ont été exécutées que sur `veille_test`.
@@ -151,9 +160,10 @@ avant tout commit.
 
 ## 8. Git
 
-Branche : `main` — arbre propre, dernier commit `9e47ca1`.
+Branche : `main` — dernier commit `c1588e4`.
 
 ```
+c1588e4 docs: add project handover document                     ← reprise
 9e47ca1 feat: add source catalogue and personal subscriptions   ← M1.9
 6504116 test: add MariaDB PHPUnit configuration                 ← M1.8
 ef33b05 feat: add initial application database migrations       ← M1.7
@@ -165,10 +175,17 @@ a91098b docs: define Git workflow rules
 ```
 
 - Remote : `origin = https://github.com/nekzeen/veille.git` —
-  `origin/main` **inexistante** : les 8 commits sont locaux, **jamais
+  `origin/main` **inexistante** : les commits sont locaux, **jamais
   poussés** (push uniquement sur validation explicite de Gaël).
 - `.env`, `vendor/`, `node_modules/`, `public/build/` : ignorés, jamais
   commités.
+- **Travaux M1.10.2.x–M1.10.3.2 (audités)** : `composer.json` +
+  `composer.lock` (SimplePie 1.9.0), `Collecteur_RSS_Architecture.md`,
+  `app/Enums/FeedFormat.php`, `app/Services/Feed/` (client sécurisé,
+  validateur, politique IP, résolveur, parseur, DTO, exceptions),
+  tests unitaires associés et `tests/fixtures/feeds/` (11 fixtures) —
+  consolidés en 4 commits (M1.10.3.3 : docs, dépendance, parseur,
+  client HTTP sécurisé).
 
 ## 9. Missions
 
@@ -182,21 +199,25 @@ Roadmap.md, le module Sources correspond au jalon M2) :
 | M1.7 | 10 migrations Laravel écrites (commit `ef33b05`) |
 | M1.8 | Validation MariaDB + `phpunit.mariadb.xml` (commit `6504116`) |
 | M1.9 | Module Sources : implémentation (M1.9.1), audit + corrections QueryException/UTC (M1.9.2–M1.9.4), commit `9e47ca1` (M1.9.5) |
+| M1.10.1 | `Collecteur_RSS_Architecture.md` — conception collecteur, décisions P1–P12 actées |
+| M1.10.2.1 | `simplepie/simplepie` 1.9.0 installé |
+| M1.10.2.2 | `SimplePieFeedParser` + DTO + `FeedFormat` + fixtures |
+| M1.10.3 | `SecureFeedClient` + `FeedUrlValidator` + `IpAddressPolicy` + `DnsResolver` |
+| M1.10.3.1 | Audit global : anomalie URL/enclosure trouvée et corrigée, faux positifs hostnames hex, codes 3xx non gérés, frontières IPv6 — corrections M1.10.3.2 |
+| M1.10.3.3 | Consolidation Git du collecteur : 4 commits (docs, SimplePie, parseur, client HTTP) — aucun push |
 
-**Prochaine mission — M1.10 : collecte RSS/Atom, déduplication,
-stockage des articles.** Points à traiter :
+**Prochaine mission — M1.10.4 : déduplication et persistance des
+articles.** Points à traiter :
 
-- récupération sécurisée des flux (SimplePie à installer) ;
-- **protection SSRF** complète (DataModel §4.G : allowlist IP,
-  validation DNS, anti-rebinding, ≤ 3 redirections revalidées) ;
-- parsing RSS/Atom tolérant ;
-- déduplication `dedup_key` / `url_hash` (§4.B) ;
-- stockage mutualisé `articles` ;
-- GET conditionnel ETag/Last-Modified, `fail_count` + backoff,
-  fréquence de collecte (15 min, D12), `is_active` au seuil ;
-- job + scheduler `schedule:run` (queue `database`).
-
-Ne pas commencer M1.10 dans la foulée : attendre la mission dédiée.
+- `ArticleUpsertService` : chaîne `dedup_key`/`url_hash`/`content_hash`
+  (§4.B, P8), arbre de décision, transaction atomique par source (P9) ;
+- **`ArticleUrlNormalizer` (B.2) — explicitement reporté ici** depuis le
+  livrable parsing (point de consommation = la déduplication) ;
+- GET conditionnel ETag/Last-Modified déjà supporté par
+  `SecureFeedClient::fetch()` ; `fail_count` + backoff P6, seuil
+  `is_active` P2 à câbler au job ;
+- job `FetchFeedJob` (P7) + `feeds:fetch` + scheduler viennent ensuite
+  (M1.10.5), puis revue/consolidation Git (M1.10.6).
 
 ## 10. Règles de travail avec Devin
 
