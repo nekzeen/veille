@@ -2,15 +2,31 @@
 
 namespace App\Models;
 
+use Carbon\CarbonInterface;
 use Database\Factories\SourceFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
+/**
+ * @property Carbon|null $last_fetched_at
+ * @property Carbon|null $last_success_at
+ * @property int $fail_count
+ */
 class Source extends Model
 {
     /** @use HasFactory<SourceFactory> */
     use HasFactory;
+
+    /** Rythme normal de collecte, en minutes (D12). */
+    public const FETCH_INTERVAL_MINUTES = 15;
+
+    /** Plafond du backoff, en minutes (P6). */
+    public const BACKOFF_MAX_MINUTES = 360;
+
+    /** Échecs consécutifs entraînant la désactivation (P2). */
+    public const DEACTIVATION_THRESHOLD = 10;
 
     protected $fillable = [
         'feed_url',
@@ -30,7 +46,41 @@ class Source extends Model
             'orphaned_at' => 'datetime',
             'last_fetched_at' => 'datetime',
             'last_success_at' => 'datetime',
+            'fail_count' => 'integer',
         ];
+    }
+
+    /**
+     * Délai avant nouvelle tentative (P6) : min(15 × 2^(n−1), 360) min,
+     * `n` = échecs consécutifs ; 0 ou 1 → rythme normal (D12).
+     */
+    public static function backoffMinutes(int $failCount): int
+    {
+        $exponent = min(max($failCount - 1, 0), 5);
+
+        return min(self::FETCH_INTERVAL_MINUTES * (2 ** $exponent), self::BACKOFF_MAX_MINUTES);
+    }
+
+    /** Source collectable : active et non orpheline (P1, P2). */
+    public function isEligibleForFetch(): bool
+    {
+        return $this->is_active && $this->orphaned_at === null;
+    }
+
+    /**
+     * Échéance implicite `last_fetched_at + delay(fail_count)` ;
+     * null si jamais collectée (due immédiatement).
+     */
+    public function dueAt(): ?CarbonInterface
+    {
+        return $this->last_fetched_at?->copy()->addMinutes(self::backoffMinutes($this->fail_count ?? 0));
+    }
+
+    public function isDue(?CarbonInterface $now = null): bool
+    {
+        $dueAt = $this->dueAt();
+
+        return $dueAt === null || $dueAt->lessThanOrEqualTo($now ?? now());
     }
 
     /** @return HasMany<UserSource, $this> */
