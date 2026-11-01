@@ -40,6 +40,16 @@ php artisan config:cache route:cache view:cache
 Vérifier avant de finir une mission : `pint --test`, `phpstan`,
 `php artisan test` — les trois doivent passer.
 
+## Workflow Git
+
+- Un **commit indépendant par étape cohérente et validée** ; ne pas
+  accumuler plusieurs fonctionnalités ou missions dans un même commit.
+- Avant chaque commit : tests + contrôles qualité, `git diff`,
+  `git diff --check`, vérification des fichiers indexés.
+- Après chaque commit : communiquer hash, message et résultats des
+  contrôles. Jamais de push sans validation explicite de Gaël.
+- Détail complet : [Conventions.md](Conventions.md) § Git.
+
 ## Interdictions strictes
 
 1. **Ne jamais modifier** le vhost Apache (`/etc/apache2/sites-enabled/`),
@@ -47,8 +57,9 @@ Vérifier avant de finir une mission : `pint --test`, `phpstan`,
 2. **Ne jamais toucher** aux autres sites (`/var/www/clients/*` hors web18).
 3. **Ne jamais committer** `.env`, secrets, `vendor/`, `node_modules/`,
    `public/build/`.
-4. **Aucun `git commit` / `git push` sans validation explicite** de
-   l'utilisateur.
+4. **Push Git** : jamais sans demande ou validation explicite de Gaël.
+   **Commits** : un par étape cohérente et validée — voir
+   « Workflow Git » ci-dessus et Conventions.md § Git.
 5. **Aucune écriture dans `/web`** hors procédure de déploiement validée
    (cf. Deployment.md). Ne pas supprimer `error/`, `stats/`,
    `standard_index.html` — fichiers gérés par ISPConfig.

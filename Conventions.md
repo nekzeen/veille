@@ -71,9 +71,23 @@
 - **Conventional Commits** : `feat:`, `fix:`, `docs:`, `refactor:`,
   `test:`, `chore:`, `perf:`, `build:`, `ci:`.
 - Sujet ≤ 72 caractères, impératif ("add", pas "added").
-- Pas de force-push sur `main` ; pas de commit de secrets, `.env`,
-  `vendor/`, `node_modules/`, `public/build/` (artefacts).
 - Tags semver `vX.Y.Z` sur les jalons de roadmap.
+
+### Workflow de commits
+
+- **Un commit indépendant par étape cohérente et validée** — ne jamais
+  accumuler plusieurs fonctionnalités ou missions dans un même commit, et
+  ne jamais attendre la fin de plusieurs missions pour versionner.
+- Avant chaque commit : tests et contrôles qualité (`pint --test`,
+  `phpstan`, `php artisan test`), examen des modifications (`git diff`),
+  vérification des problèmes de format (`git diff --check`) et des fichiers
+  effectivement indexés (`git diff --cached`).
+- Ne jamais versionner de secrets, mots de passe, `.env`, clés privées,
+  `vendor/`, `node_modules/` ou `public/build/` (artefacts).
+- Pas de force-push sur `main`.
+- Après chaque commit : communiquer son hash, son message et le résultat
+  des contrôles.
+- **Jamais de push sans demande ou validation explicite de Gaël.**
 
 ## Documentation
 
