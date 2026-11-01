@@ -38,4 +38,10 @@ class Source extends Model
     {
         return $this->hasMany(UserSource::class);
     }
+
+    /** @return HasMany<Article, $this> */
+    public function articles(): HasMany
+    {
+        return $this->hasMany(Article::class);
+    }
 }
