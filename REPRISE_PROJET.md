@@ -1,9 +1,10 @@
 # Reprise du projet Veille
 
 > Document d'accueil pour une nouvelle session de développement.
-> État vérifié le 2026-11-02 (branche `main`) ; collecteur RSS/Atom
+> État vérifié le 2026-11-08 (branche `main`) ; collecteur RSS/Atom
 > complet et planifié (M1.10.5.x), voir
-> `Orchestration_Collecteur_RSS.md`.
+> `Orchestration_Collecteur_RSS.md` ; module Veilles livré
+> (M1.11.1–M1.11.5, en attente de commit), voir §9.
 > **À lire après `AGENTS.md`** — celui-ci reste la référence des
 > interdictions et règles non négociables.
 
@@ -57,7 +58,8 @@ modèles `Source`/`UserSource`, `SourceSubscriptionService`,
 (`feeds:fetch` /5 min + `queue:work --stop-when-empty --max-time=50`
 /min, `withoutOverlapping` à TTL arbitré 15/10 min) et cron ISPConfig
 installé (`schedule:run` chaque minute sous `web18`).
-**Pas encore implémentés** : matching mots-clés, notifications,
+**Pas encore implémentés** : page de lecture des articles,
+`article_user` (lu/non lu), favoris/notes/catégories, notifications,
 dossiers `Actions/`/`Notifications/`.
 
 ## 3. Hébergement
@@ -140,7 +142,8 @@ Décisions structurantes :
 | **Collecte effective des flux** : client HTTP `SecureFeedClient` + parseur `SimplePieFeedParser` | ✅ livrés (M1.10.2.x–M1.10.3.2) |
 | Orchestration collecte (`ArticleUpsertService`, `FetchFeedJob`, `feeds:fetch`, scheduler, verrous P6/P7) | ✅ livrée et testée bout-en-bout (M1.10.4–M1.10.5) |
 | Cron ISPConfig `schedule:run` chaque minute | ✅ installé, exécution confirmée |
-| Veilles, mots-clés, matching, favoris/notes/catégories, alertes | ❌ postérieurs |
+| **Module Veilles** : modèles+FK composites (M1.11.1), CRUD+Policy (M1.11.2), `KeywordMatcher` (M1.11.3), intégration `FetchFeedJob` (M1.11.4), `VeilleRematcher`+`veilles:rematch` (M1.11.5) | ✅ livré, en attente de commit |
+| Page de lecture des articles, favoris/notes/catégories, alertes | ❌ postérieurs |
 | Déploiement `/web` | ❌ prérequis manuels ISPConfig |
 
 ## 7. Tests
@@ -149,10 +152,10 @@ Résultats vérifiés (ne pas extrapoler) :
 
 - **25 tests initiaux** (Breeze : auth, profil, exemples) — validés
   SQLite et MariaDB en M1.8.
-- **188 tests** (421 assertions) après le collecteur RSS/Atom
-  (M1.10.2.x–M1.10.3.2) — verts sur SQLite (`php artisan test`) et sur
+- **455 tests** (1320 assertions) après le module Veilles
+  (M1.11.1–M1.11.5) — verts sur SQLite (`php artisan test`) et sur
   MariaDB `veille_test` (`-c phpunit.mariadb.xml`) ; bi-moteur
-  vérifié le 2026-11-01 sur la série M1.10.3.3.
+  vérifié le 2026-11-08.
 - `./vendor/bin/phpstan analyse` : **aucune erreur** (Larastan).
 - `./vendor/bin/pint --test` : **passed**.
 - Les migrations métier n'ont été exécutées que sur `veille_test`.
@@ -209,19 +212,18 @@ Roadmap.md, le module Sources correspond au jalon M2) :
 | M1.10.3 | `SecureFeedClient` + `FeedUrlValidator` + `IpAddressPolicy` + `DnsResolver` |
 | M1.10.3.1 | Audit global : anomalie URL/enclosure trouvée et corrigée, faux positifs hostnames hex, codes 3xx non gérés, frontières IPv6 — corrections M1.10.3.2 |
 | M1.10.3.3 | Consolidation Git du collecteur : 4 commits (docs, SimplePie, parseur, client HTTP) — aucun push |
+| M1.10.4–M1.10.5 | `ArticleUpsertService`, `FetchFeedJob`, `feeds:fetch`, scheduler — collecte opérationnelle bout-en-bout |
+| M1.11.1 | Modèles `Veille`/`VeilleKeyword`/`ArticleVeille`, relations, FK composites, `VeillePolicy` |
+| M1.11.2 | CRUD veilles (routes `auth`, FormRequests, `VeilleService`, vues Blade), abonnement auto sur source catalogue |
+| M1.11.3 + M1.11.3.1 | `KeywordMatcher` (normalisation PHP NFD+diacritiques, sous-chaîne OR, `matched_keyword` ordonné) + consolidation (parsing, limites, espaces Unicode) |
+| M1.11.4 | Matching dans `FetchFeedJob` sur les articles du lot (`ArticleUpsertResult::articleIds`) ; erreur matcher journalisée, collecte préservée |
+| M1.11.5 | `VeilleRematcher` (diff d'ensembles, fenêtre 6 mois `COALESCE(published_at, collected_at)`) + `veilles:rematch {--veille=}` ; câblé post-commit dans `VeilleService` (create/update-règles/réactivation) |
 
-**Prochaine mission — M1.10.4 : déduplication et persistance des
-articles.** Points à traiter :
-
-- `ArticleUpsertService` : chaîne `dedup_key`/`url_hash`/`content_hash`
-  (§4.B, P8), arbre de décision, transaction atomique par source (P9) ;
-- **`ArticleUrlNormalizer` (B.2) — explicitement reporté ici** depuis le
-  livrable parsing (point de consommation = la déduplication) ;
-- GET conditionnel ETag/Last-Modified déjà supporté par
-  `SecureFeedClient::fetch()` ; `fail_count` + backoff P6, seuil
-  `is_active` P2 à câbler au job ;
-- job `FetchFeedJob` (P7) + `feeds:fetch` + scheduler viennent ensuite
-  (M1.10.5), puis revue/consolidation Git (M1.10.6).
+**Prochaine étape — page de lecture des articles par veille** (reste du
+jalon M3 de Roadmap.md) : liste paginée triée par date, périmètre
+`article_veille` ∩ fenêtre de rétention. Puis `article_user` (lu/non
+lu), favoris, notes, catégories (M4) et alertes e-mail (M5).
+Consolidation Git des 35 entrées en attente à effectuer après revue.
 
 ## 10. Règles de travail avec Devin
 
