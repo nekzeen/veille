@@ -17,6 +17,12 @@ namespace App\Services\Feed\Data;
  */
 final class ArticleUpsertResult
 {
+    /**
+     * @param  list<int>  $articleIds  IDs des lignes `articles`
+     *                                 correspondant aux items du lot (créées, mises à jour ou
+     *                                 inchangées) — permet au matching de n'examiner que ces
+     *                                 articles, sans relecture globale de la source.
+     */
     public function __construct(
         public readonly int $received,
         public readonly int $created,
@@ -24,5 +30,6 @@ final class ArticleUpsertResult
         public readonly int $unchanged,
         public readonly int $skipped,
         public readonly int $collisions,
+        public readonly array $articleIds,
     ) {}
 }

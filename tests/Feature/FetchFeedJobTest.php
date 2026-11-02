@@ -16,6 +16,7 @@ use App\Services\Feed\Exceptions\FeedTooLargeException;
 use App\Services\Feed\Exceptions\FeedUrlException;
 use App\Services\Feed\FeedClientInterface;
 use App\Services\Feed\FeedParserInterface;
+use App\Services\KeywordMatcher;
 use Carbon\Carbon;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -65,7 +66,7 @@ class FetchFeedJobTest extends TestCase
         ?FeedParserInterface $parser = null,
     ): void {
         $id = $source instanceof Source ? $source->id : $source;
-        (new FetchFeedJob($id))->handle($client, $parser ?? new SpyFeedParser, app(ArticleUpsertService::class));
+        (new FetchFeedJob($id))->handle($client, $parser ?? new SpyFeedParser, app(ArticleUpsertService::class), app(KeywordMatcher::class));
     }
 
     private function assertUntouched(Source $source): void

@@ -45,8 +45,8 @@ final class ArticleUpsertService
     public function upsertBatch(Source $source, array $items): ArticleUpsertResult
     {
         return DB::transaction(function () use ($source, $items): ArticleUpsertResult {
-            /** @var array{created:int, updated:int, unchanged:int, skipped:int, collisions:int} $stats */
-            $stats = ['created' => 0, 'updated' => 0, 'unchanged' => 0, 'skipped' => 0, 'collisions' => 0];
+            /** @var array{created:int, updated:int, unchanged:int, skipped:int, collisions:int, article_ids:list<int>} $stats */
+            $stats = ['created' => 0, 'updated' => 0, 'unchanged' => 0, 'skipped' => 0, 'collisions' => 0, 'article_ids' => []];
 
             foreach ($items as $item) {
                 if (! $this->isStorable($item)) {
@@ -65,6 +65,7 @@ final class ArticleUpsertService
                 unchanged: $stats['unchanged'],
                 skipped: $stats['skipped'],
                 collisions: $stats['collisions'],
+                articleIds: $stats['article_ids'],
             );
         });
     }
@@ -83,7 +84,7 @@ final class ArticleUpsertService
         return $item->title !== null && trim($item->title) !== '';
     }
 
-    /** @param  array{created:int, updated:int, unchanged:int, skipped:int, collisions:int}  $stats */
+    /** @param  array{created:int, updated:int, unchanged:int, skipped:int, collisions:int, article_ids:list<int>}  $stats */
     private function upsertItem(Source $source, FeedItemData $item, array &$stats): void
     {
         $normalizedUrl = $this->normalizer->normalize($item->url);
@@ -130,6 +131,7 @@ final class ArticleUpsertService
                 + ['guid' => self::truncate($item->guid, 512), 'dedup_key' => $dedupKey]);
             $row->save();
             $stats['updated']++;
+            $stats['article_ids'][] = $row->id;
 
             return;
         }
@@ -150,7 +152,7 @@ final class ArticleUpsertService
      * (§4.B) — ; rien sinon. `collected_at` et `article_user/*`
      * préservés.
      *
-     * @param  array{created:int, updated:int, unchanged:int, skipped:int, collisions:int}  $stats
+     * @param  array{created:int, updated:int, unchanged:int, skipped:int, collisions:int, article_ids:list<int>}  $stats
      */
     private function refreshOrSkip(
         Article $row,
@@ -163,6 +165,7 @@ final class ArticleUpsertService
     ): void {
         if ($row->content_hash === $contentHash && $row->url_hash === $urlHash) {
             $stats['unchanged']++;
+            $stats['article_ids'][] = $row->id;
 
             return;
         }
@@ -170,9 +173,10 @@ final class ArticleUpsertService
         $row->fill($this->mutableAttributes($item, $normalizedUrl, $urlHash, $contentHash));
         $row->save();
         $stats['updated']++;
+        $stats['article_ids'][] = $row->id;
     }
 
-    /** @param  array{created:int, updated:int, unchanged:int, skipped:int, collisions:int}  $stats */
+    /** @param  array{created:int, updated:int, unchanged:int, skipped:int, collisions:int, article_ids:list<int>}  $stats */
     private function insertArticle(
         Source $source,
         FeedItemData $item,
@@ -183,7 +187,7 @@ final class ArticleUpsertService
         array &$stats,
     ): void {
         try {
-            Article::create([
+            $article = Article::create([
                 'source_id' => $source->id,
                 ...$this->attributesFor($item, $normalizedUrl, $urlHash, $dedupKey, $contentHash),
                 // collected_at : instantané UTC au premier insert,
@@ -191,6 +195,7 @@ final class ArticleUpsertService
                 'collected_at' => now('UTC'),
             ]);
             $stats['created']++;
+            $stats['article_ids'][] = $article->id;
         } catch (QueryException $e) {
             // Violation UNIQUE = course d'insertion réelle : relire par
             // la clé et rejouer le chemin « clé connue ». Toute autre

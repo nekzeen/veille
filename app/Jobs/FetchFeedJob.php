@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\Article;
 use App\Models\Source;
 use App\Services\Feed\ArticleUpsertService;
 use App\Services\Feed\Data\ArticleUpsertResult;
@@ -12,6 +13,7 @@ use App\Services\Feed\Exceptions\FeedHttpException;
 use App\Services\Feed\Exceptions\FeedParseException;
 use App\Services\Feed\FeedClientInterface;
 use App\Services\Feed\FeedParserInterface;
+use App\Services\KeywordMatcher;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -61,6 +63,7 @@ final class FetchFeedJob implements ShouldBeUnique, ShouldQueue
         FeedClientInterface $client,
         FeedParserInterface $parser,
         ArticleUpsertService $upserter,
+        KeywordMatcher $matcher,
     ): void {
         if ($this->dueSource() === null) {
             return;
@@ -78,7 +81,7 @@ final class FetchFeedJob implements ShouldBeUnique, ShouldQueue
             // collecter la source entre la vérification et l'acquisition.
             $source = $this->dueSource();
             if ($source !== null) {
-                $this->collect($source, $client, $parser, $upserter);
+                $this->collect($source, $client, $parser, $upserter, $matcher);
             }
         } finally {
             $lock->release();
@@ -106,6 +109,7 @@ final class FetchFeedJob implements ShouldBeUnique, ShouldQueue
         FeedClientInterface $client,
         FeedParserInterface $parser,
         ArticleUpsertService $upserter,
+        KeywordMatcher $matcher,
     ): void {
         $startedAt = hrtime(true);
 
@@ -120,14 +124,64 @@ final class FetchFeedJob implements ShouldBeUnique, ShouldQueue
 
         $stats = $parsed !== null ? $upserter->upsertBatch($source, $parsed->items) : null;
 
-        $this->recordSuccess($source, $result, $parsed, $stats, $startedAt);
+        // Matching §4.D : uniquement les articles du lot (créés,
+        // mis à jour ou revus — un article connu peut rencontrer une
+        // veille créée depuis sa première collecte). Les articles
+        // sont déjà persistés : une erreur de matching n'est ni un
+        // échec de collecte ni une perte de données.
+        $matchStats = null;
+        if ($stats !== null && $stats->articleIds !== []) {
+            $matchStats = $this->matchArticles($source, $stats->articleIds, $matcher);
+        }
+
+        $this->recordSuccess($source, $result, $parsed, $stats, $matchStats, $startedAt);
     }
 
+    /**
+     * Enregistre les correspondances `article_veille` du lot. En cas
+     * d'échec : journalisé avec contexte, le succès de collecte est
+     * tout de même enregistré — la prochaine collecte rencontrera les
+     * mêmes articles et réparera les correspondances (idempotence).
+     *
+     * @param  list<int>  $articleIds
+     * @return array{examined:int, matched:int, created:int, existing:int}|null
+     */
+    private function matchArticles(Source $source, array $articleIds, KeywordMatcher $matcher): ?array
+    {
+        try {
+            $articles = Article::whereIn('id', $articleIds)->get();
+            $totals = ['examined' => 0, 'matched' => 0, 'created' => 0, 'existing' => 0];
+
+            foreach ($articles as $article) {
+                $result = $matcher->matchArticle($article);
+                $totals['examined'] += $result->examined;
+                $totals['matched'] += $result->matched;
+                $totals['created'] += $result->created;
+                $totals['existing'] += $result->existing;
+            }
+
+            return $totals;
+        } catch (Throwable $e) {
+            Log::error('feeds.fetch.match_failed', [
+                'source_id' => $source->id,
+                'article_ids' => $articleIds,
+                'exception_class' => $e::class,
+                'message' => mb_substr($e->getMessage(), 0, 500),
+            ]);
+
+            return null;
+        }
+    }
+
+    /**
+     * @param  array{examined:int, matched:int, created:int, existing:int}|null  $matchStats
+     */
     private function recordSuccess(
         Source $source,
         FeedFetchResult $result,
         ?ParsedFeed $parsed,
         ?ArticleUpsertResult $stats,
+        ?array $matchStats,
         int $startedAt,
     ): void {
         $now = now();
@@ -163,6 +217,8 @@ final class FetchFeedJob implements ShouldBeUnique, ShouldQueue
             'unchanged' => $stats->unchanged ?? 0,
             'skipped' => $stats->skipped ?? 0,
             'collisions' => $stats->collisions ?? 0,
+            'match_created' => $matchStats['created'] ?? null,
+            'match_existing' => $matchStats['existing'] ?? null,
             'fail_count' => 0,
             'next_due_at' => $now->copy()->addMinutes(Source::backoffMinutes(0))->toIso8601String(),
         ]);
