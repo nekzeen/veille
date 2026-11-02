@@ -15,6 +15,9 @@
                     <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                         {{ __('Dashboard') }}
                     </x-nav-link>
+                    <x-nav-link :href="route('veilles.index')" :active="request()->routeIs('veilles.*')">
+                        Mes veilles
+                    </x-nav-link>
                     <x-nav-link :href="route('sources.catalogue')" :active="request()->routeIs('sources.catalogue')">
                         Catalogue
                     </x-nav-link>
@@ -75,6 +78,9 @@
         <div class="pt-2 pb-3 space-y-1">
             <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                 {{ __('Dashboard') }}
+            </x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('veilles.index')" :active="request()->routeIs('veilles.*')">
+                Mes veilles
             </x-responsive-nav-link>
             <x-responsive-nav-link :href="route('sources.catalogue')" :active="request()->routeIs('sources.catalogue')">
                 Catalogue
