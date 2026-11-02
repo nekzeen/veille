@@ -1,8 +1,9 @@
 # Reprise du projet Veille
 
 > Document d'accueil pour une nouvelle session de développement.
-> État vérifié le 2026-11-01 au commit `c1588e4` (branche `main`) ;
-> travaux M1.10 consolidés par la série de commits M1.10.3.3 (§8).
+> État vérifié le 2026-11-02 (branche `main`) ; collecteur RSS/Atom
+> complet et planifié (M1.10.5.x), voir
+> `Orchestration_Collecteur_RSS.md`.
 > **À lire après `AGENTS.md`** — celui-ci reste la référence des
 > interdictions et règles non négociables.
 
@@ -50,12 +51,14 @@ modèles `Source`/`UserSource`, `SourceSubscriptionService`,
 **collecteur RSS/Atom** : `app/Services/Feed/`
 (`SecureFeedClient` anti-SSRF, `FeedUrlValidator`, `IpAddressPolicy`,
 `DnsResolver`, `SimplePieFeedParser`, interfaces, DTO, exceptions) +
-`app/Enums/FeedFormat.php`.
-**Pas encore implémentés** : orchestration de la collecte
-(`ArticleUpsertService` §4.B, `ArticleUrlNormalizer` B.2 — reportés à
-M1.10.4), jobs, scheduler actif (`routes/console.php` est le squelette
-par défaut), matching, notifications, dossiers `Actions/`/`Jobs/`/
-`Notifications/`.
+`app/Enums/FeedFormat.php` ; **collecte opérationnelle** :
+`ArticleUpsertService`, `FetchFeedJob`, commande `feeds:fetch`
+(`FetchFeedsCommand`), scheduler dans `routes/console.php`
+(`feeds:fetch` /5 min + `queue:work --stop-when-empty --max-time=50`
+/min, `withoutOverlapping` à TTL arbitré 15/10 min) et cron ISPConfig
+installé (`schedule:run` chaque minute sous `web18`).
+**Pas encore implémentés** : matching mots-clés, notifications,
+dossiers `Actions/`/`Notifications/`.
 
 ## 3. Hébergement
 
@@ -135,9 +138,10 @@ Décisions structurantes :
 | Désabonnement transactionnel + `orphaned_at` | ✅ |
 | Isolation (Policy `UserSource`, routes `auth`) | ✅ |
 | **Collecte effective des flux** : client HTTP `SecureFeedClient` + parseur `SimplePieFeedParser` | ✅ livrés (M1.10.2.x–M1.10.3.2) |
-| Orchestration collecte (`ArticleUpsertService`, `FetchFeedJob`, `feeds:fetch`, scheduler) | ❌ non implémentée (M1.10.4+) |
+| Orchestration collecte (`ArticleUpsertService`, `FetchFeedJob`, `feeds:fetch`, scheduler, verrous P6/P7) | ✅ livrée et testée bout-en-bout (M1.10.4–M1.10.5) |
+| Cron ISPConfig `schedule:run` chaque minute | ✅ installé, exécution confirmée |
 | Veilles, mots-clés, matching, favoris/notes/catégories, alertes | ❌ postérieurs |
-| Déploiement `/web` + cron scheduler | ❌ prérequis manuels ISPConfig |
+| Déploiement `/web` | ❌ prérequis manuels ISPConfig |
 
 ## 7. Tests
 
