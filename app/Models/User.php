@@ -53,4 +53,10 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return $this->hasMany(UserSource::class);
     }
+
+    /** @return HasMany<Veille, $this> */
+    public function veilles(): HasMany
+    {
+        return $this->hasMany(Veille::class);
+    }
 }

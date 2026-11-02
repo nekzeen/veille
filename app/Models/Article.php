@@ -6,6 +6,7 @@ use Database\Factories\ArticleFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Article extends Model
 {
@@ -39,5 +40,12 @@ class Article extends Model
     public function source(): BelongsTo
     {
         return $this->belongsTo(Source::class);
+    }
+
+    /** @return BelongsToMany<Veille, $this> */
+    public function veilles(): BelongsToMany
+    {
+        return $this->belongsToMany(Veille::class, 'article_veille')
+            ->withPivot(['user_id', 'matched_keyword', 'created_at']);
     }
 }
