@@ -155,10 +155,13 @@ Résultats vérifiés (ne pas extrapoler) :
 
 - **25 tests initiaux** (Breeze : auth, profil, exemples) — validés
   SQLite et MariaDB en M1.8.
-- **578 tests** (1640 assertions) après M1.12 — verts sur SQLite
-  (`php artisan test`) et sur MariaDB `veille_test`
-  (`-c phpunit.mariadb.xml`) ; bi-moteur vérifié le 2026-11-03
-  (recette M1.12.5).
+- **628 tests** (1818 assertions) après la revue de consolidation
+  M1.13.x — verts sur SQLite (`php artisan test`) et sur MariaDB
+  `veille_test` (`-c phpunit.mariadb.xml`) ; bi-moteur vérifié le
+  2026-11-03. La revue a extrait la règle d'accès autonome dans
+  `app/Services/Articles/ArticlePersonalAccess.php` (`hasAccess` —
+  partagée par favoris, notes, archives) et ajouté un test
+  d'interactions croisées des 4 états.
 - `./vendor/bin/phpstan analyse` : **aucune erreur** (Larastan).
 - `./vendor/bin/pint --test` : **passed**.
 - `composer validate` : **valid** ; `composer audit` : aucune
@@ -291,10 +294,90 @@ combinés, `"0"`, paramètres malformés, sanitisation rendue, payloads
 malveillants, fallback, prev/next filtrés, retour contexte, images
 DNS-stub, CSP ×2) ; total **578/1640 bi-moteur**.
 
-**Prochaine action précise** : consolidation Git — proposition en 4
-commits logiques (dépendance+cache, politique d'images, sanitizer,
-lecture+docs) soumise à validation de Gaël, puis `article_user`
-(lu/non lu), favoris, notes, catégories (M4), alertes e-mail (M5).
+### M1.13.1 — État lu / non lu (implémenté, non commité)
+
+**Référence** : DataModel.md §3.9 et §4.D-bis/§4.E.
+
+**État** : implémenté et testé — **non commité** (autorisation
+requise). `app/Models/ArticleUser.php` (PK composite
+`(user_id, article_id)` — `setKeysForSaveQuery` comme `ArticleVeille`),
+`database/factories/ArticleUserFactory.php`,
+`app/Services/Articles/ArticleReadState.php` (`isRead`, `markRead`
+upsert idempotent, `markUnread` = DELETE si ligne sans autre donnée
+personnelle sinon `is_read=0`, `readMap` une requête), deux mutations
+dans `VeilleArticleController` (`PUT`/`DELETE
+/veilles/{veille}/articles/{article}/read`, mêmes garde-fous que la
+lecture : policy + association + rétention → 404), badges Lu/Non lu +
+formulaires `@method` dans les deux vues articles. `user_id` toujours
+issu de l'utilisateur authentifié. Aucune migration.
+13 tests Feature ciblés (isolation stricte, idempotence, préservation
+favori/note, article_veille intacts, GET refusé, user_id injecté
+ignoré).
+
+### M1.13.2 — Favoris (implémenté, non commité)
+
+**Référence** : DataModel.md §3.9, §4.D-bis, §4.E.
+
+**État** : implémenté et testé — **non commité** (avec M1.13.1,
+autorisation requise). `ArticleUser::hasPersonalDataBesides()`
+factorise la règle « ligne vide » (réutilisée par lu/non lu et
+favoris) ; `app/Services/Articles/ArticleFavoriteState.php`
+(`isFavorite`, `markFavorite` upsert, `removeFavorite` = DELETE si
+plus aucune donnée personnelle sinon `is_favorite=0`, `favoriteMap`,
+`favorites()` paginée par jointure `article_user` — accès autonome
+§4.D-bis via `ArticlePersonalAccess::hasAccess`, correspondance
+veille OU ligne `article_user` propre) ; mutations favoris dans `VeilleArticleController`
+(mêmes garde-fous que la lecture) ; `FavoriteController` : `GET
+/favoris` (liste paginée tri date effective DESC), `GET
+/articles/{article}` (lecture autonome sanitisée + fallback),
+PUT/DELETE `/articles/{article}/favorite` — 404 sans droit ;
+vues `favorites/{index,show}` + toggles dans les pages veille + lien
+« Mes favoris » dans la navigation. Un favori **protège de la purge**
+(§4.E). 11 tests Feature (idempotence, isolation, préservation
+note/catégorie/lu, survie à la suppression de correspondance, 404
+article d'autrui, tri/pagination).
+
+### M1.13.3 — Notes personnelles (implémenté, non commité)
+
+**Référence** : DataModel.md §3.9, §4.D-bis, §4.E.
+
+**État** : implémenté et testé — **non commité** (avec M1.13.1–13.2).
+`app/Services/Articles/ArticleNoteState.php` (`getNote`, `saveNote`
+trim + upsert — vide/espaces = absence, `deleteNote` = NULL puis
+DELETE si ligne vide via `hasPersonalDataBesides`) ; mutations note
+PUT/DELETE sur les deux périmètres (`/veilles/{v}/articles/{a}/note`
+mêmes garde-fous lecture ; `/articles/{a}/note` accès autonome
+§4.D-bis → 404) ; carte « Ma note » (affichage échappé + textarea +
+enregistrer/supprimer) dans `veilles/articles/show` et
+`favorites/show`. Une note **protège de la purge** ; l'accès à
+l'article survit à la disparition de la correspondance. 9 tests
+Feature (CRUD, vide=absence, isolation stricte, préservation
+lu/favori/catégorie, survie sans `article_veille`, anti-purge,
+`user_id` injecté ignoré).
+
+### M1.13.4 — Archivage personnel (implémenté, non commité)
+
+**Référence** : DataModel.md §3.9, §4.D-bis, §4.E.
+
+**État** : implémenté et testé — **non commité** (avec M1.13.1–13.3).
+`app/Services/Articles/ArticleArchiveState.php` (`isArchived`,
+`archive` upsert, `unarchive` = DELETE si ligne vide via
+`hasPersonalDataBesides` sinon `is_archived=0`, `archiveMap`,
+`archived()` paginée) ; **masquage** des archives dans
+`VeilleArticleQuery::base()` (`whereNotExists` `article_user` du
+propriétaire → liste, filtres, navigation, `findArticle` → 404) et
+dans `favorites()` — conforme §4.E (l'archive masque, ne protège pas
+de la purge) ; `ArchiveController` : `GET /archives` (20/page, tri
+date effective DESC) + PUT/DELETE `/articles/{a}/archive` via
+`personalAccess->hasAccess` → 404 ; bouton « Archiver » dans la fiche veille,
+toggle dans la fiche personnelle, page `archives/index` + lien nav
+« Mes archives ». 12 tests Feature (idempotence, isolation, masquage
+veille+favoris, survie sans `article_veille`, purgeable seul vs
+protégé par favori/note, pagination, `user_id` injecté ignoré).
+
+**Prochaine action précise** : consolidation Git de M1.13.x sur
+validation de Gaël, puis catégories (M4) et alertes e-mail (M5).
+Page « Mes notes » : reste possible pour une mission ultérieure.
 
 **Consignes de continuité — futures sessions Devin (M1.12)** :
 
