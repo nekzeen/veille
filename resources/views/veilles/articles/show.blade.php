@@ -67,6 +67,36 @@
                             <button type="submit" class="text-xs text-indigo-700 hover:underline">Archiver</button>
                         </form>
                     </p>
+                    <p class="text-sm text-gray-500">
+                        Catégorie :
+                        <form method="POST" action="{{ route('veilles.articles.category', [$veille, $article]) }}" class="inline-flex items-center gap-2">
+                            @csrf
+                            @method('PUT')
+                            <input type="hidden" name="return" value="show">
+                            @foreach ($params as $name => $value)
+                                <input type="hidden" name="{{ $name }}" value="{{ $value }}">
+                            @endforeach
+                            <select name="category_id"
+                                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm py-1">
+                                <option value="">— choisir —</option>
+                                @foreach ($categories as $category)
+                                    <option value="{{ $category->id }}" @selected($categoryId === $category->id)>{{ $category->name }}</option>
+                                @endforeach
+                            </select>
+                            <button type="submit" class="text-xs text-indigo-700 hover:underline">Classer</button>
+                        </form>
+                        @if ($categoryId !== null)
+                            · <form method="POST" action="{{ route('veilles.articles.category.delete', [$veille, $article]) }}" class="inline">
+                                @csrf
+                                @method('DELETE')
+                                <input type="hidden" name="return" value="show">
+                                @foreach ($params as $name => $value)
+                                    <input type="hidden" name="{{ $name }}" value="{{ $value }}">
+                                @endforeach
+                                <button type="submit" class="text-xs text-indigo-700 hover:underline">Retirer la catégorie</button>
+                            </form>
+                        @endif
+                    </p>
                     @if ($originalUrl !== null)
                         <a href="{{ $originalUrl }}" target="_blank" rel="noopener noreferrer"
                            class="inline-flex items-center text-sm text-indigo-700 hover:underline">

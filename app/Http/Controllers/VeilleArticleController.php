@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Article;
+use App\Models\Category;
 use App\Models\Veille;
 use App\Services\Articles\ArticleArchiveState;
+use App\Services\Articles\ArticleCategoryState;
 use App\Services\Articles\ArticleFavoriteState;
 use App\Services\Articles\ArticleNoteState;
 use App\Services\Articles\ArticleReadState;
@@ -32,6 +34,7 @@ class VeilleArticleController extends Controller
         private readonly ArticleFavoriteState $favoriteStates,
         private readonly ArticleNoteState $noteStates,
         private readonly ArticleArchiveState $archiveStates,
+        private readonly ArticleCategoryState $categoryStates,
     ) {}
 
     public function index(Request $request, Veille $veille): View
@@ -93,6 +96,9 @@ class VeilleArticleController extends Controller
             'isRead' => $this->readStates->isRead($request->user(), $article),
             'isFavorite' => $this->favoriteStates->isFavorite($request->user(), $article),
             'note' => $this->noteStates->getNote($request->user(), $article),
+            'categories' => $this->categoryStates->categories($request->user()),
+            'categoryId' => $this->categoryStates->categoryIdOf(
+                $request->user(), $article),
             'prev' => $this->articles->previous($veille, $article, $sourceId, $keyword),
             'next' => $this->articles->next($veille, $article, $sourceId, $keyword),
             'params' => $params,
@@ -154,6 +160,31 @@ class VeilleArticleController extends Controller
     {
         return $this->mutateArticle($request, $veille, $article,
             fn ($user, $a) => $this->archiveStates->unarchive($user, $a));
+    }
+
+    /** Affecter une catégorie du user — PUT. Étrangère → 404 (§4.D-bis). */
+    public function setCategory(Request $request, Veille $veille, Article $article): RedirectResponse
+    {
+        return $this->mutateArticle($request, $veille, $article,
+            fn ($user, $a) => $this->categoryStates->setCategory(
+                $user, $a, $this->ownCategory($request, $user->id)));
+    }
+
+    /** Retirer la catégorie — DELETE. Autres états préservés. */
+    public function clearCategory(Request $request, Veille $veille, Article $article): RedirectResponse
+    {
+        return $this->mutateArticle($request, $veille, $article,
+            fn ($user, $a) => $this->categoryStates->clearCategory($user, $a));
+    }
+
+    /** Catégorie demandée appartenant à l'utilisateur, ou 404. */
+    private function ownCategory(Request $request, int $userId): Category
+    {
+        $id = $request->input('category_id');
+
+        return Category::where('user_id', $userId)
+            ->where('id', is_scalar($id) ? (int) $id : 0)
+            ->firstOrFail();
     }
 
     /**

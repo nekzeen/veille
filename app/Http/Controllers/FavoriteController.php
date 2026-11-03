@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Article;
 use App\Services\Articles\ArticleArchiveState;
+use App\Services\Articles\ArticleCategoryState;
 use App\Services\Articles\ArticleFavoriteState;
 use App\Services\Articles\ArticleNoteState;
 use App\Services\Articles\ArticlePersonalAccess;
@@ -28,6 +29,7 @@ class FavoriteController extends Controller
         private readonly ArticleNoteState $noteStates,
         private readonly ArticleArchiveState $archiveStates,
         private readonly ArticlePersonalAccess $personalAccess,
+        private readonly ArticleCategoryState $categoryStates,
         private readonly HtmlContentSanitizer $sanitizer,
     ) {}
 
@@ -67,6 +69,8 @@ class FavoriteController extends Controller
             'isFavorite' => $this->favorites->isFavorite($user, $article),
             'isArchived' => $this->archiveStates->isArchived($user, $article),
             'note' => $this->noteStates->getNote($user, $article),
+            'categories' => $this->categoryStates->categories($user),
+            'categoryId' => $this->categoryStates->categoryIdOf($user, $article),
         ]);
     }
 

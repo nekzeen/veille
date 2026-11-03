@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ArchiveController;
 use App\Http\Controllers\CatalogueController;
+use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\FavoriteController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\UserSourceController;
@@ -60,6 +61,22 @@ Route::middleware('auth')->group(function () {
             ->name('veilles.articles.archive');
         Route::delete('/veilles/{veille}/articles/{article}/archive', [VeilleArticleController::class, 'unarchiveArticle'])
             ->name('veilles.articles.unarchive');
+        Route::put('/veilles/{veille}/articles/{article}/category', [VeilleArticleController::class, 'setCategory'])
+            ->name('veilles.articles.category');
+        Route::delete('/veilles/{veille}/articles/{article}/category', [VeilleArticleController::class, 'clearCategory'])
+            ->name('veilles.articles.category.delete');
+
+        // « Mes catégories » : CRUD + navigation par catégorie.
+        Route::get('/categories', [CategoryController::class, 'index'])->name('categories.index');
+        Route::post('/categories', [CategoryController::class, 'store'])->name('categories.store');
+        Route::patch('/categories/{category}', [CategoryController::class, 'update'])->name('categories.update');
+        Route::delete('/categories/{category}', [CategoryController::class, 'destroy'])->name('categories.destroy');
+        Route::get('/categories/{category}/articles', [CategoryController::class, 'articles'])
+            ->name('categories.articles');
+        Route::put('/articles/{article}/category', [CategoryController::class, 'setCategory'])
+            ->name('articles.category');
+        Route::delete('/articles/{article}/category', [CategoryController::class, 'clearCategory'])
+            ->name('articles.category.delete');
 
         // Espace personnel (§4.D-bis) : favoris et lecture autonome.
         Route::get('/favoris', [FavoriteController::class, 'index'])->name('favorites.index');

@@ -24,6 +24,9 @@
                     <x-nav-link :href="route('archives.index')" :active="request()->routeIs('archives.*')">
                         Mes archives
                     </x-nav-link>
+                    <x-nav-link :href="route('categories.index')" :active="request()->routeIs('categories.*')">
+                        Mes catégories
+                    </x-nav-link>
                     <x-nav-link :href="route('sources.catalogue')" :active="request()->routeIs('sources.catalogue')">
                         Catalogue
                     </x-nav-link>
