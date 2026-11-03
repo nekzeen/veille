@@ -21,6 +21,9 @@ class ArticleVeille extends Model
     /** Pas d'updated_at ; created_at est historique (§3.8). */
     public const UPDATED_AT = null;
 
+    /** Haute-eau de l'id simulé sous SQLite (tests uniquement). */
+    private static int $sqliteIdHighWater = 0;
+
     /** timestamp(6) : comparée aux bornes microseconde des digests. */
     protected $dateFormat = 'Y-m-d H:i:s.u';
 
@@ -43,6 +46,14 @@ class ArticleVeille extends Model
         // si absent, la FK composite rejette toute incohérence.
         static::creating(function (ArticleVeille $match): void {
             $match->user_id ??= $match->veille?->user_id;
+            // SQLite ne gère pas AUTOINCREMENT hors PK : l'id
+            // technique (curseur des digests) y est simulé par un
+            // compteur de haute-eau de processus, monotone même après
+            // suppression (un id consommé n'est jamais réattribué).
+            if ($match->getConnection()->getDriverName() === 'sqlite' && $match->getAttribute('id') === null) {
+                self::$sqliteIdHighWater = max(self::$sqliteIdHighWater, (int) static::max('id')) + 1;
+                $match->setAttribute('id', self::$sqliteIdHighWater);
+            }
         });
     }
 
