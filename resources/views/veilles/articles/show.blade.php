@@ -25,12 +25,93 @@
                         @if ($article->author)
                             · par {{ $article->author }}
                         @endif
+                        · <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium {{ $isRead ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800' }}">{{ $isRead ? 'Lu' : 'Non lu' }}</span>
+                        · <form method="POST"
+                                action="{{ route($isRead ? 'veilles.articles.unread' : 'veilles.articles.read', [$veille, $article]) }}"
+                                class="inline">
+                            @csrf
+                            @method($isRead ? 'DELETE' : 'PUT')
+                            <input type="hidden" name="return" value="show">
+                            @foreach ($params as $name => $value)
+                                <input type="hidden" name="{{ $name }}" value="{{ $value }}">
+                            @endforeach
+                            <button type="submit" class="text-xs text-indigo-700 hover:underline">
+                                {{ $isRead ? 'Marquer non lu' : 'Marquer lu' }}
+                            </button>
+                        </form>
+                        @if ($isFavorite)
+                            · <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">★ Favori</span>
+                        @endif
+                        · <form method="POST"
+                                action="{{ route($isFavorite ? 'veilles.articles.unfavorite' : 'veilles.articles.favorite', [$veille, $article]) }}"
+                                class="inline">
+                            @csrf
+                            @method($isFavorite ? 'DELETE' : 'PUT')
+                            <input type="hidden" name="return" value="show">
+                            @foreach ($params as $name => $value)
+                                <input type="hidden" name="{{ $name }}" value="{{ $value }}">
+                            @endforeach
+                            <button type="submit" class="text-xs text-indigo-700 hover:underline">
+                                {{ $isFavorite ? 'Retirer le favori' : 'Ajouter aux favoris' }}
+                            </button>
+                        </form>
+                        · <form method="POST"
+                                action="{{ route('veilles.articles.archive', [$veille, $article]) }}"
+                                class="inline">
+                            @csrf
+                            @method('PUT')
+                            <input type="hidden" name="return" value="index">
+                            @foreach ($params as $name => $value)
+                                <input type="hidden" name="{{ $name }}" value="{{ $value }}">
+                            @endforeach
+                            <button type="submit" class="text-xs text-indigo-700 hover:underline">Archiver</button>
+                        </form>
                     </p>
                     @if ($originalUrl !== null)
                         <a href="{{ $originalUrl }}" target="_blank" rel="noopener noreferrer"
                            class="inline-flex items-center text-sm text-indigo-700 hover:underline">
                             Ouvrir l'article original ↗
                         </a>
+                    @endif
+                </div>
+            </div>
+
+            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                <div class="p-6 text-gray-900">
+                    <h3 class="text-sm font-medium text-gray-700 mb-2">Ma note</h3>
+                    @if ($note !== null)
+                        <p class="text-sm text-gray-800 whitespace-pre-line mb-3">{{ $note }}</p>
+                    @endif
+                    <form method="POST" action="{{ route('veilles.articles.note', [$veille, $article]) }}" class="space-y-2">
+                        @csrf
+                        @method('PUT')
+                        <input type="hidden" name="return" value="show">
+                        @foreach ($params as $name => $value)
+                            <input type="hidden" name="{{ $name }}" value="{{ $value }}">
+                        @endforeach
+                        <textarea name="note" rows="3"
+                                  class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                                  placeholder="Ajouter une note personnelle…">{{ old('note', $note) }}</textarea>
+                        <button type="submit"
+                                class="inline-flex items-center px-3 py-1.5 bg-gray-800 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150">
+                            Enregistrer la note
+                        </button>
+                        @if ($note !== null)
+                            <button type="submit" form="delete-note"
+                                    class="inline-flex items-center px-3 py-1.5 bg-white border border-gray-300 rounded-md font-semibold text-xs text-red-700 uppercase tracking-widest hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition ease-in-out duration-150">
+                                Supprimer la note
+                            </button>
+                        @endif
+                    </form>
+                    @if ($note !== null)
+                        <form id="delete-note" method="POST" action="{{ route('veilles.articles.note.delete', [$veille, $article]) }}">
+                            @csrf
+                            @method('DELETE')
+                            <input type="hidden" name="return" value="show">
+                            @foreach ($params as $name => $value)
+                                <input type="hidden" name="{{ $name }}" value="{{ $value }}">
+                            @endforeach
+                        </form>
                     @endif
                 </div>
             </div>

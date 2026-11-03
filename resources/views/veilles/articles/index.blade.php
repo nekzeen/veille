@@ -74,6 +74,40 @@
                                         @if ($article->pivot->matched_keyword !== null)
                                             · <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">{{ $article->pivot->matched_keyword }}</span>
                                         @endif
+                                        @if ($readMap[$article->id] ?? false)
+                                            · <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Lu</span>
+                                        @else
+                                            · <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">Non lu</span>
+                                        @endif
+                                        · <form method="POST"
+                                                action="{{ route(($readMap[$article->id] ?? false) ? 'veilles.articles.unread' : 'veilles.articles.read', [$veille, $article]) }}"
+                                                class="inline">
+                                            @csrf
+                                            @method(($readMap[$article->id] ?? false) ? 'DELETE' : 'PUT')
+                                            <input type="hidden" name="return" value="index">
+                                            @foreach ($params as $name => $value)
+                                                <input type="hidden" name="{{ $name }}" value="{{ $value }}">
+                                            @endforeach
+                                            <button type="submit" class="text-xs text-indigo-700 hover:underline">
+                                                {{ ($readMap[$article->id] ?? false) ? 'Marquer non lu' : 'Marquer lu' }}
+                                            </button>
+                                        </form>
+                                        @if ($favMap[$article->id] ?? false)
+                                            · <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">★ Favori</span>
+                                        @endif
+                                        · <form method="POST"
+                                                action="{{ route(($favMap[$article->id] ?? false) ? 'veilles.articles.unfavorite' : 'veilles.articles.favorite', [$veille, $article]) }}"
+                                                class="inline">
+                                            @csrf
+                                            @method(($favMap[$article->id] ?? false) ? 'DELETE' : 'PUT')
+                                            <input type="hidden" name="return" value="index">
+                                            @foreach ($params as $name => $value)
+                                                <input type="hidden" name="{{ $name }}" value="{{ $value }}">
+                                            @endforeach
+                                            <button type="submit" class="text-xs text-indigo-700 hover:underline">
+                                                {{ ($favMap[$article->id] ?? false) ? 'Retirer le favori' : 'Ajouter aux favoris' }}
+                                            </button>
+                                        </form>
                                     </p>
                                     @if ($article->summary !== null && $article->summary !== '')
                                         <p class="mt-1 text-sm text-gray-600">{{ Str::limit(strip_tags($article->summary), 200) }}</p>

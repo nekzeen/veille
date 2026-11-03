@@ -18,6 +18,12 @@
                     <x-nav-link :href="route('veilles.index')" :active="request()->routeIs('veilles.*')">
                         Mes veilles
                     </x-nav-link>
+                    <x-nav-link :href="route('favorites.index')" :active="request()->routeIs('favorites.*', 'articles.*')">
+                        Mes favoris
+                    </x-nav-link>
+                    <x-nav-link :href="route('archives.index')" :active="request()->routeIs('archives.*')">
+                        Mes archives
+                    </x-nav-link>
                     <x-nav-link :href="route('sources.catalogue')" :active="request()->routeIs('sources.catalogue')">
                         Catalogue
                     </x-nav-link>

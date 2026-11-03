@@ -1,6 +1,8 @@
 <?php
 
+use App\Http\Controllers\ArchiveController;
 use App\Http\Controllers\CatalogueController;
+use App\Http\Controllers\FavoriteController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\UserSourceController;
 use App\Http\Controllers\VeilleArticleController;
@@ -42,6 +44,39 @@ Route::middleware('auth')->group(function () {
             ->name('veilles.articles.index');
         Route::get('/veilles/{veille}/articles/{article}', [VeilleArticleController::class, 'show'])
             ->name('veilles.articles.show');
+        Route::put('/veilles/{veille}/articles/{article}/read', [VeilleArticleController::class, 'markRead'])
+            ->name('veilles.articles.read');
+        Route::delete('/veilles/{veille}/articles/{article}/read', [VeilleArticleController::class, 'markUnread'])
+            ->name('veilles.articles.unread');
+        Route::put('/veilles/{veille}/articles/{article}/favorite', [VeilleArticleController::class, 'markFavorite'])
+            ->name('veilles.articles.favorite');
+        Route::delete('/veilles/{veille}/articles/{article}/favorite', [VeilleArticleController::class, 'removeFavorite'])
+            ->name('veilles.articles.unfavorite');
+        Route::put('/veilles/{veille}/articles/{article}/note', [VeilleArticleController::class, 'saveNote'])
+            ->name('veilles.articles.note');
+        Route::delete('/veilles/{veille}/articles/{article}/note', [VeilleArticleController::class, 'deleteNote'])
+            ->name('veilles.articles.note.delete');
+        Route::put('/veilles/{veille}/articles/{article}/archive', [VeilleArticleController::class, 'archiveArticle'])
+            ->name('veilles.articles.archive');
+        Route::delete('/veilles/{veille}/articles/{article}/archive', [VeilleArticleController::class, 'unarchiveArticle'])
+            ->name('veilles.articles.unarchive');
+
+        // Espace personnel (§4.D-bis) : favoris et lecture autonome.
+        Route::get('/favoris', [FavoriteController::class, 'index'])->name('favorites.index');
+        Route::get('/articles/{article}', [FavoriteController::class, 'show'])->name('articles.show');
+        Route::put('/articles/{article}/favorite', [FavoriteController::class, 'markFavorite'])
+            ->name('articles.favorite');
+        Route::delete('/articles/{article}/favorite', [FavoriteController::class, 'removeFavorite'])
+            ->name('articles.unfavorite');
+        Route::put('/articles/{article}/note', [FavoriteController::class, 'saveNote'])
+            ->name('articles.note');
+        Route::delete('/articles/{article}/note', [FavoriteController::class, 'deleteNote'])
+            ->name('articles.note.delete');
+        Route::get('/archives', [ArchiveController::class, 'index'])->name('archives.index');
+        Route::put('/articles/{article}/archive', [ArchiveController::class, 'archive'])
+            ->name('articles.archive');
+        Route::delete('/articles/{article}/archive', [ArchiveController::class, 'unarchive'])
+            ->name('articles.unarchive');
     });
 });
 

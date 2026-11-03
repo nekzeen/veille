@@ -1,0 +1,107 @@
+<x-app-layout>
+    <x-slot name="header">
+        <div class="flex items-center justify-between gap-4">
+            <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+                {{ $article->title }}
+            </h2>
+            <a href="{{ route('favorites.index') }}"
+               class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md font-semibold text-xs text-gray-700 uppercase tracking-widest hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150 shrink-0">
+                Retour aux favoris
+            </a>
+        </div>
+    </x-slot>
+
+    <div class="py-12">
+        <div class="max-w-3xl mx-auto sm:px-6 lg:px-8 space-y-6">
+
+            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                <div class="p-6 text-gray-900 space-y-3">
+                    <p class="text-sm text-gray-500">
+                        {{ $article->source->name ?? 'Source inconnue' }}
+                        · {{ ($article->published_at ?? $article->collected_at)->format('d/m/Y H:i') }}
+                        @if ($article->author)
+                            · par {{ $article->author }}
+                        @endif
+                        · <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium {{ $isRead ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800' }}">{{ $isRead ? 'Lu' : 'Non lu' }}</span>
+                        · <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium {{ $isFavorite ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-600' }}">{{ $isFavorite ? '★ Favori' : 'Pas favori' }}</span>
+                        · <form method="POST"
+                                action="{{ route($isFavorite ? 'articles.unfavorite' : 'articles.favorite', $article) }}"
+                                class="inline">
+                            @csrf
+                            @method($isFavorite ? 'DELETE' : 'PUT')
+                            <input type="hidden" name="return" value="article">
+                            <button type="submit" class="text-xs text-indigo-700 hover:underline">
+                                {{ $isFavorite ? 'Retirer le favori' : 'Ajouter aux favoris' }}
+                            </button>
+                        </form>
+                        · <form method="POST"
+                                action="{{ route($isArchived ? 'articles.unarchive' : 'articles.archive', $article) }}"
+                                class="inline">
+                            @csrf
+                            @method($isArchived ? 'DELETE' : 'PUT')
+                            <input type="hidden" name="return" value="article">
+                            <button type="submit" class="text-xs text-indigo-700 hover:underline">
+                                {{ $isArchived ? 'Désarchiver' : 'Archiver' }}
+                            </button>
+                        </form>
+                    </p>
+                    @if ($originalUrl !== null)
+                        <a href="{{ $originalUrl }}" target="_blank" rel="noopener noreferrer"
+                           class="inline-flex items-center text-sm text-indigo-700 hover:underline">
+                            Ouvrir l'article original ↗
+                        </a>
+                    @endif
+                </div>
+            </div>
+
+            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                <div class="p-6 text-gray-900">
+                    <h3 class="text-sm font-medium text-gray-700 mb-2">Ma note</h3>
+                    @if ($note !== null)
+                        <p class="text-sm text-gray-800 whitespace-pre-line mb-3">{{ $note }}</p>
+                    @endif
+                    <form method="POST" action="{{ route('articles.note', $article) }}" class="space-y-2">
+                        @csrf
+                        @method('PUT')
+                        <textarea name="note" rows="3"
+                                  class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                                  placeholder="Ajouter une note personnelle…">{{ old('note', $note) }}</textarea>
+                        <button type="submit"
+                                class="inline-flex items-center px-3 py-1.5 bg-gray-800 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150">
+                            Enregistrer la note
+                        </button>
+                        @if ($note !== null)
+                            <button type="submit" form="delete-note"
+                                    class="inline-flex items-center px-3 py-1.5 bg-white border border-gray-300 rounded-md font-semibold text-xs text-red-700 uppercase tracking-widest hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition ease-in-out duration-150">
+                                Supprimer la note
+                            </button>
+                        @endif
+                    </form>
+                    @if ($note !== null)
+                        <form id="delete-note" method="POST" action="{{ route('articles.note.delete', $article) }}">
+                            @csrf
+                            @method('DELETE')
+                        </form>
+                    @endif
+                </div>
+            </div>
+
+            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                <div class="p-6 text-gray-900">
+                    @if ($body !== '')
+                        <div class="article-content space-y-4">{!! $body !!}</div>
+                    @else
+                        <p class="text-gray-500">
+                            Le contenu de cet article n'est pas disponible en lecture interne.
+                            @if ($originalUrl !== null)
+                                <a href="{{ $originalUrl }}" target="_blank" rel="noopener noreferrer"
+                                   class="text-indigo-700 hover:underline">Consulter l'article original ↗</a>
+                            @endif
+                        </p>
+                    @endif
+                </div>
+            </div>
+
+        </div>
+    </div>
+</x-app-layout>

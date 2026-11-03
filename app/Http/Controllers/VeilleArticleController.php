@@ -4,9 +4,15 @@ namespace App\Http\Controllers;
 
 use App\Models\Article;
 use App\Models\Veille;
+use App\Services\Articles\ArticleArchiveState;
+use App\Services\Articles\ArticleFavoriteState;
+use App\Services\Articles\ArticleNoteState;
+use App\Services\Articles\ArticleReadState;
 use App\Services\Articles\HtmlContentSanitizer;
 use App\Services\Articles\VeilleArticleQuery;
+use Closure;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 
@@ -22,6 +28,10 @@ class VeilleArticleController extends Controller
     public function __construct(
         private readonly VeilleArticleQuery $articles,
         private readonly HtmlContentSanitizer $sanitizer,
+        private readonly ArticleReadState $readStates,
+        private readonly ArticleFavoriteState $favoriteStates,
+        private readonly ArticleNoteState $noteStates,
+        private readonly ArticleArchiveState $archiveStates,
     ) {}
 
     public function index(Request $request, Veille $veille): View
@@ -41,6 +51,10 @@ class VeilleArticleController extends Controller
             'filterSources' => $this->articles->filterSources($veille),
             'keywords' => $this->articles->matchedKeywords($veille),
             'params' => $params,
+            'readMap' => $this->readStates->readMap(
+                $request->user(), $paginator->getCollection()->pluck('id')),
+            'favMap' => $this->favoriteStates->favoriteMap(
+                $request->user(), $paginator->getCollection()->pluck('id')),
         ]);
     }
 
@@ -76,10 +90,97 @@ class VeilleArticleController extends Controller
             'article' => $article,
             'body' => $body,
             'originalUrl' => $originalUrl,
+            'isRead' => $this->readStates->isRead($request->user(), $article),
+            'isFavorite' => $this->favoriteStates->isFavorite($request->user(), $article),
+            'note' => $this->noteStates->getNote($request->user(), $article),
             'prev' => $this->articles->previous($veille, $article, $sourceId, $keyword),
             'next' => $this->articles->next($veille, $article, $sourceId, $keyword),
             'params' => $params,
         ]);
+    }
+
+    /** Marquer lu — PUT. Idempotent (PK composite). */
+    public function markRead(Request $request, Veille $veille, Article $article): RedirectResponse
+    {
+        return $this->mutateArticle($request, $veille, $article,
+            fn ($user, $a) => $this->readStates->markRead($user, $a));
+    }
+
+    /** Marquer non lu — DELETE. Ligne supprimée si rien d'autre à conserver. */
+    public function markUnread(Request $request, Veille $veille, Article $article): RedirectResponse
+    {
+        return $this->mutateArticle($request, $veille, $article,
+            fn ($user, $a) => $this->readStates->markUnread($user, $a));
+    }
+
+    /** Marquer favori — PUT. Idempotent. */
+    public function markFavorite(Request $request, Veille $veille, Article $article): RedirectResponse
+    {
+        return $this->mutateArticle($request, $veille, $article,
+            fn ($user, $a) => $this->favoriteStates->markFavorite($user, $a));
+    }
+
+    /** Retirer le favori — DELETE. Autres données personnelles préservées. */
+    public function removeFavorite(Request $request, Veille $veille, Article $article): RedirectResponse
+    {
+        return $this->mutateArticle($request, $veille, $article,
+            fn ($user, $a) => $this->favoriteStates->removeFavorite($user, $a));
+    }
+
+    /** Enregistrer la note — PUT. Vide = suppression (règle §3.9). */
+    public function saveNote(Request $request, Veille $veille, Article $article): RedirectResponse
+    {
+        return $this->mutateArticle($request, $veille, $article,
+            fn ($user, $a) => $this->noteStates->saveNote(
+                $user, $a, is_string($n = $request->input('note')) ? $n : null));
+    }
+
+    /** Supprimer la note — DELETE. Autres données personnelles préservées. */
+    public function deleteNote(Request $request, Veille $veille, Article $article): RedirectResponse
+    {
+        return $this->mutateArticle($request, $veille, $article,
+            fn ($user, $a) => $this->noteStates->deleteNote($user, $a));
+    }
+
+    /** Archiver — PUT. L'article sort ensuite du flux veille (masquage §4.E). */
+    public function archiveArticle(Request $request, Veille $veille, Article $article): RedirectResponse
+    {
+        return $this->mutateArticle($request, $veille, $article,
+            fn ($user, $a) => $this->archiveStates->archive($user, $a));
+    }
+
+    /** Désarchiver — DELETE. Autres données personnelles préservées. */
+    public function unarchiveArticle(Request $request, Veille $veille, Article $article): RedirectResponse
+    {
+        return $this->mutateArticle($request, $veille, $article,
+            fn ($user, $a) => $this->archiveStates->unarchive($user, $a));
+    }
+
+    /**
+     * Mutation d'état personnel : mêmes garde-fous que la lecture —
+     * propriété de la veille (policy) + association article/veille
+     * dans la fenêtre (404 sinon). `user_id` = utilisateur
+     * authentifié, jamais un paramètre.
+     */
+    private function mutateArticle(
+        Request $request, Veille $veille, Article $article, Closure $mutation,
+    ): RedirectResponse {
+        Gate::authorize('view', $veille);
+
+        $article = $this->articles->findArticle($veille, $article->id)
+            ?? abort(404);
+
+        $params = self::navParams($request);
+        $mutation($request->user(), $article);
+
+        // `return` limité à la liste blanche — jamais d'URL arbitraire.
+        if ($request->input('return') === 'show') {
+            return redirect()->route(
+                'veilles.articles.show', [$veille, $article] + $params);
+        }
+
+        return redirect()->route(
+            'veilles.articles.index', [$veille] + $params);
     }
 
     /**
