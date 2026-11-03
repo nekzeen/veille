@@ -8,7 +8,6 @@ use App\Models\UserSource;
 use App\Models\Veille;
 use App\Models\VeilleKeyword;
 use App\Services\Data\ArticleMatchResult;
-use Illuminate\Database\QueryException;
 use Normalizer;
 
 /**
@@ -32,6 +31,10 @@ use Normalizer;
  */
 final class KeywordMatcher
 {
+    public function __construct(
+        private readonly ArticleVeilleWriter $writer,
+    ) {}
+
     /**
      * Ligatures latines non décomposables en NFD. Équivalence de
      * convenance (typographie courante), pas une équivalence
@@ -104,19 +107,10 @@ final class KeywordMatcher
                 continue;
             }
 
-            try {
-                ArticleVeille::create([
-                    'veille_id' => $veille->id,
-                    'article_id' => $article->id,
-                    'user_id' => $veille->user_id,
-                    'matched_keyword' => $term,
-                ]);
+            // Écriture unique via ArticleVeilleWriter (verrou veilles).
+            if ($this->writer->record($veille, $article->id, $term)) {
                 $created++;
-            } catch (QueryException $e) {
-                // Seul un vrai doublon concurrent est absorbé.
-                if (! SourceSubscriptionService::isUniqueViolation($e)) {
-                    throw $e;
-                }
+            } else {
                 $existing++;
             }
         }

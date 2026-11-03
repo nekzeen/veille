@@ -6,7 +6,6 @@ use App\Models\Article;
 use App\Models\ArticleVeille;
 use App\Models\Veille;
 use App\Services\Data\VeilleRematchResult;
-use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -30,6 +29,7 @@ final class VeilleRematcher
 
     public function __construct(
         private readonly KeywordMatcher $matcher,
+        private readonly ArticleVeilleWriter $writer,
     ) {}
 
     public function rematch(Veille $veille): VeilleRematchResult
@@ -72,27 +72,20 @@ final class VeilleRematcher
         $toCreate = array_diff_key($desired, $existing->flip()->all());
         $toDelete = $existing->diff(array_keys($desired));
 
+        // Toutes les écritures passent par ArticleVeilleWriter : le
+        // verrou `veilles` est acquis à la première écriture de la
+        // transaction et conservé jusqu'à son commit (watermark des
+        // digests étanche, §3.11).
         $created = 0;
         DB::transaction(function () use ($veille, $toDelete, $toCreate, &$created): void {
             if ($toDelete->isNotEmpty()) {
-                ArticleVeille::where('veille_id', $veille->id)
-                    ->whereIn('article_id', $toDelete->all())->delete();
+                $this->writer->deleteFor($veille, $toDelete->all());
             }
 
             foreach ($toCreate as $articleId => $term) {
-                try {
-                    ArticleVeille::create([
-                        'veille_id' => $veille->id,
-                        'article_id' => $articleId,
-                        'user_id' => $veille->user_id,
-                        'matched_keyword' => $term,
-                    ]);
+                // Doublon concurrent (job de collecte) absorbé : false.
+                if ($this->writer->record($veille, $articleId, $term)) {
                     $created++;
-                } catch (QueryException $e) {
-                    if (! SourceSubscriptionService::isUniqueViolation($e)) {
-                        throw $e;
-                    }
-                    // Doublon concurrent (job de collecte) : conservé.
                 }
             }
         });

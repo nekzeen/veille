@@ -1,0 +1,79 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\ArticleVeille;
+use App\Models\Veille;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
+
+/**
+ * Point unique d'écriture des correspondances `article_veille`
+ * (DataModel §3.8/§3.11). Toute insertion ou suppression verrouille
+ * d'abord la ligne `veilles` par SELECT ... FOR UPDATE et conserve
+ * le verrou jusqu'au commit : identifiants `article_veille.id`
+ * attribués uniquement sous le verrou ⇒ ordre de verrou = ordre
+ * d'id = ordre de commit par veille, ce qui rend le watermark de
+ * génération des digests étanche (aucune insertion non commitée ne
+ * peut exister sans détenir le verrou).
+ *
+ * Appelé dans une transaction englobante, `DB::transaction` devient
+ * un savepoint : le verrou ligne est conservé jusqu'au commit de la
+ * transaction externe (jamais libéré prématurément).
+ */
+final class ArticleVeilleWriter
+{
+    /**
+     * Verrouille la ligne de la veille (SELECT ... FOR UPDATE). Doit
+     * précéder toute écriture sur ses correspondances.
+     */
+    private function lockVeille(int $veilleId): void
+    {
+        Veille::whereKey($veilleId)->lockForUpdate()->value('id');
+    }
+
+    /**
+     * Enregistre une correspondance sous verrou. Retourne true si la
+     * ligne est créée, false si elle existait déjà (doublon
+     * concurrent absorbé via la PK composite).
+     */
+    public function record(Veille $veille, int $articleId, ?string $matchedKeyword): bool
+    {
+        return DB::transaction(function () use ($veille, $articleId, $matchedKeyword): bool {
+            $this->lockVeille($veille->id);
+
+            try {
+                ArticleVeille::create([
+                    'veille_id' => $veille->id,
+                    'article_id' => $articleId,
+                    'user_id' => $veille->user_id,
+                    'matched_keyword' => $matchedKeyword,
+                ]);
+
+                return true;
+            } catch (QueryException $e) {
+                if (! SourceSubscriptionService::isUniqueViolation($e)) {
+                    throw $e;
+                }
+
+                return false;
+            }
+        });
+    }
+
+    /**
+     * Supprime les correspondances d'une veille pour les articles
+     * donnés, sous le même verrou que les insertions.
+     *
+     * @param  list<int>  $articleIds
+     */
+    public function deleteFor(Veille $veille, array $articleIds): int
+    {
+        return DB::transaction(function () use ($veille, $articleIds): int {
+            $this->lockVeille($veille->id);
+
+            return ArticleVeille::where('veille_id', $veille->id)
+                ->whereIn('article_id', $articleIds)->delete();
+        });
+    }
+}
