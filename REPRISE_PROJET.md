@@ -155,7 +155,7 @@ Résultats vérifiés (ne pas extrapoler) :
 
 - **25 tests initiaux** (Breeze : auth, profil, exemples) — validés
   SQLite et MariaDB en M1.8.
-- **652 tests** (1904 assertions) après la revue M1.14.3 — verts sur SQLite
+- **696 tests** (2026 assertions) après la revue M5.6 — verts sur SQLite
   (`php artisan test`) et sur MariaDB `veille_test`
   (`-c phpunit.mariadb.xml`) ; bi-moteur vérifié le 2026-11-03.
   La revue M1.13.x a extrait la règle d'accès autonome dans
@@ -411,8 +411,86 @@ unicité, cross-tenant → 404, préservation états, masquage archivés,
 pagination/tri, autonomie §4.D-bis, `user_id` injecté ignoré,
 transaction de suppression).
 
-**Prochaine action précise** : M1.14.3 — revue combinée +
-consolidation Git de M1.14.x.
+M1.14.1→M1.14.3 : revue + consolidation Git effectuées et publiées
+(`5f34c7a`/`d2c2664`/`c686cc4`/`d3a49eb`).
+
+### M5.2 — Génération des digests (implémenté, non commité)
+
+**État** : implémenté et testé — **non commité**. Conception M5.1
+verrouillée : curseur mécanique `article_veille.id` (ordre total,
+égalités de timestamp impossibles), protocole de verrou `veilles`
+FOR UPDATE rendant le watermark étanche (ordre de verrou = ordre
+d'id = ordre de commit).
+
+- Migrations : `article_veille.id BIGINT UNSIGNED AUTO_INCREMENT
+  UNIQUE` (PK composite conservée ; id simulé par haute-eau sous
+  SQLite dans `ArticleVeille::creating`) ; `veille_alerts` +
+  `start_match_id`/`end_match_id` (curseurs, sans FK).
+- `app/Services/ArticleVeilleWriter.php` : point unique d'écriture
+  (`record`/`deleteFor`), verrou `veilles` avant toute écriture,
+  conservé jusqu'au commit externe ; `KeywordMatcher` et
+  `VeilleRematcher` adaptés — aucun autre chemin n'écrit.
+- `app/Services/Alerts/DigestWindowCalculator.php` : ouverture =
+  `end_match_id` du dernier `sent` (0 au 1er), watermark = MAX(id)
+  sous verrou, sélection `id > open AND id <= watermark LIMIT 50`.
+- `app/Models/VeilleAlert.php` + `alerts:generate` : par veille
+  active+alertes → tx + verrou + garde `pending`/`processing` +
+  `INSERT pending` (UNIQUE veille_id+digest_date absorbé en
+  garde-fou) ; `digest_date` = jour civil Europe/Paris, `period_*`
+  = affichage. Aucun digest vide, aucun envoi (M5.3+).
+
+Tests : 14 Feature génération + 7 Feature concurrence **MariaDB
+réelle** (connexion auxiliaire : générateur bloqué par le verrou
+puis voyant la ligne commitée — le scénario de perte historique).
+
+### M5.3 — Outbox, envoi et reprise (implémenté, non commité)
+
+**État** : implémenté et testé — **non commité** (avec M5.2).
+
+- `app/Jobs/SendVeilleDigestJob.php` : réservation atomique
+  `pending → processing` (bail 10 min, `attempts<3`, token UUID) ;
+  envoi `VeilleDigestMail` au mail du propriétaire ; clôture `sent`
+  + `sent_at` + `articles_count` **gardée par le token** ; échec →
+  `pending` (<3) ou `failed` (≥3). Fenêtre `]start,end]` ∩ lignes
+  vivantes ; 0 ligne → `sent` `articles_count=0`, **aucun e-mail
+  vide**. Livraison au moins une fois (doublon possible si crash
+  entre envoi et clôture — assumé).
+- `app/Mail/VeilleDigestMail.php` + vues `emails/veille-digest`
+  (HTML échappé) et `-text` : veille, période Europe/Paris, titre,
+  source, date Paris, mot-clé, lien lecture interne + original.
+- `alerts:distribute` (met les `pending` en file — n'envoie pas,
+  idempotent via la réservation) et `alerts:sweep` (baux expirés
+  redispatchés, `attempts>=3` expirés → `failed`).
+- Scheduler : `alerts:generate` `dailyAt('06:30')->timezone(
+  'Europe/Paris')`, `distribute` */5, `sweep` */10 — tous
+  `withoutOverlapping`. Queue `database` drainée chaque minute
+  (existant). Cron ISPConfig : `* * * * * php artisan schedule:run`
+  (cf. Deployment.md).
+
+Tests : 17 Feature outbox (Mail::fake) + scheduler — les tests de
+concurrence MariaDB M5.2 couvrent déjà le verrou.
+
+### M5.6 — Revue globale (effectuée, non commitée)
+
+M5.4 (mailable HTML+texte) et M5.5 (scheduler + doc) absorbés dans
+M5.3. Revue croisée : **deux corrections mineures** —
+`alerts:distribute` filtre désormais `attempts<3` (un `pending`
+épuisé n'est plus redispatché avant le sweep) ; +3 tests
+(distribute ignore les épuisées, job sur alerte supprimée,
+réservation concurrente refusée sous verrou réel — seconde
+connexion PDO). Chemins d'écriture `article_veille` audités :
+`unsubscribe` ne fait que supprimer (sans risque pour le
+watermark) ; tout insert/delete passe par `ArticleVeilleWriter`.
+
+**Système complet** : `alerts:generate` (06:30 Europe/Paris,
+verrou + curseur `article_veille.id`, ≤50) → `pending` →
+`alerts:distribute`/`sweep` → `SendVeilleDigestJob` (réservation
+atomique token, bail 10 min, 3 tentatives) → `VeilleDigestMail`
+→ `sent`/`failed`. Livraison au moins une fois assumée.
+
+**Prochaine action précise** : consolidation Git de tout M5
+(découpage validé avec Gaël : modèle+writer / génération /
+outbox+mail / scheduler+tests / docs).
 
 **Consignes de continuité — futures sessions Devin (M1.12)** :
 

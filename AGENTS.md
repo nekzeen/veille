@@ -79,6 +79,9 @@ Vérifier avant de finir une mission : `pint --test`, `phpstan`,
   utilisateur dans `item_user` / `item_veille`.
 - Le partage, s'il arrive, est **facultatif** et explicite.
 - Simplicité > richesse fonctionnelle pour le MVP (Roadmap.md).
+- Toute écriture sur `article_veille` (insertion **ou** suppression)
+  passe par `App\Services\ArticleVeilleWriter` — verrou `veilles`
+  FOR UPDATE obligatoire, garantie du watermark des digests.
 
 ## Cartographie de la documentation
 
