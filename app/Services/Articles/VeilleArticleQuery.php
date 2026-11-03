@@ -9,6 +9,7 @@ use App\Services\VeilleRematcher;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Requêtes de lecture des articles d'une veille (conception M1.12 §3).
@@ -38,6 +39,14 @@ final class VeilleArticleQuery
 
         return $veille->articles()
             ->with('source')
+            // Archivés masqués du flux veille (§4.E : l'archive masque,
+            // ne protège pas) — accessibles via l'espace personnel.
+            ->whereNotExists(fn ($q) => $q
+                ->select(DB::raw(1))
+                ->from('article_user')
+                ->whereColumn('article_user.article_id', 'articles.id')
+                ->where('article_user.user_id', $veille->user_id)
+                ->where('article_user.is_archived', true))
             ->whereRaw(self::EFFECTIVE_DATE.' >= ?', [$cutoff]);
     }
 
