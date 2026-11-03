@@ -1,12 +1,13 @@
 # Reprise du projet Veille
 
 > Document d'accueil pour une nouvelle session de développement.
-> État vérifié le 2026-11-03 (branche `main`) ; collecteur RSS/Atom
-> complet et planifié (M1.10.5.x), voir
-> `Orchestration_Collecteur_RSS.md` ; module Veilles livré et commité
-> (M1.11.1–M1.11.5), voir §9 ; lecture des articles M1.12 implémentée
-> et auditée, en attente de consolidation Git, voir §9 et
-> `M1.12_Conception_Technique.md`.
+> État vérifié le 2026-11-05 (branche `main`, synchronisée avec
+> `origin/main` au commit `4f3bc92`) ; collecteur RSS/Atom complet
+> et planifié (M1.10.5.x, voir `Orchestration_Collecteur_RSS.md`) ;
+> module Veilles (M1.11), lecture des articles (M1.12), états
+> personnels — lu/non lu, favoris, notes, archivage (M1.13) et
+> catégories (M1.14) — et système d'alertes quotidiennes complet
+> (M5, voir §9) : tous livrés, testés bi-moteur et publiés.
 > **À lire après `AGENTS.md`** — celui-ci reste la référence des
 > interdictions et règles non négociables.
 
@@ -59,10 +60,18 @@ modèles `Source`/`UserSource`, `SourceSubscriptionService`,
 (`FetchFeedsCommand`), scheduler dans `routes/console.php`
 (`feeds:fetch` /5 min + `queue:work --stop-when-empty --max-time=50`
 /min, `withoutOverlapping` à TTL arbitré 15/10 min) et cron ISPConfig
-installé (`schedule:run` chaque minute sous `web18`).
-**Pas encore implémentés** : page de lecture des articles,
-`article_user` (lu/non lu), favoris/notes/catégories, notifications,
-dossiers `Actions/`/`Notifications/`.
+installé (`schedule:run` chaque minute sous `web18`) ; **module
+Veilles complet** (CRUD, mots-clés, matching, rematching) ; **lecture
+des articles** (liste/fiche sanitisées, CSP, pagination) ; **états
+personnels** `article_user` (lu/non lu, favoris, notes, archivage,
+catégories — espace « Mes favoris / archives / catégories ») ;
+**alertes quotidiennes** : génération `alerts:generate` (curseur
+`article_veille.id` sous verrou `veilles`, ≤50), outbox
+`veille_alerts` (réservation atomique, bail 10 min, 3 tentatives),
+envoi `VeilleDigestMail` (HTML+texte), reprise `alerts:sweep` —
+scheduler complet dans `routes/console.php`.
+**Pas encore implémentés** : post-MVP uniquement (OPML, partage,
+recherche plein texte, API — Roadmap.md).
 
 ## 3. Hébergement
 
@@ -86,8 +95,8 @@ Debian 12 + **ISPConfig** + Apache + **PHP-FPM 8.3** (socket
 
 | Base | Rôle | État vérifié |
 |---|---|---|
-| `veille_db` | **Applicative** | 3 migrations framework Ran ; **10 migrations métier Pending** — ne rien exécuter sans validation explicite |
-| `veille_test` | **Tests uniquement** | **13 migrations Ran** (3 framework + 10 métier, batch 1) |
+| `veille_db` | **Applicative** | 3 migrations framework Ran ; **12 migrations métier Pending** — ne rien exécuter sans validation explicite |
+| `veille_test` | **Tests uniquement** | **15 migrations Ran** (3 framework + 12 métier) |
 
 - Utilisateur : `veille_usr` (accès vérifié aux deux bases).
 - **Fuseau de session MariaDB** : `'timezone' => env('DB_TIMEZONE', '+00:00')`
@@ -145,9 +154,12 @@ Décisions structurantes :
 | Orchestration collecte (`ArticleUpsertService`, `FetchFeedJob`, `feeds:fetch`, scheduler, verrous P6/P7) | ✅ livrée et testée bout-en-bout (M1.10.4–M1.10.5) |
 | Cron ISPConfig `schedule:run` chaque minute | ✅ installé, exécution confirmée |
 | **Module Veilles** : modèles+FK composites (M1.11.1), CRUD+Policy (M1.11.2), `KeywordMatcher` (M1.11.3), intégration `FetchFeedJob` (M1.11.4), `VeilleRematcher`+`veilles:rematch` (M1.11.5) | ✅ livré et commité |
-| Page de lecture des articles par veille (liste filtrée, pagination, lecture interne assainie, prev/next, CSP) | ✅ implémentée et testée (M1.12) — **non commitée** (§9) |
-| Favoris/notes/catégories, alertes | ❌ postérieurs |
+| Page de lecture des articles par veille (liste filtrée, pagination, lecture interne assainie, prev/next, CSP) | ✅ livrée et commitée (M1.12) |
+| Lu/non lu, favoris, notes, archivage (`article_user`, espaces personnels) | ✅ livrés et commités (M1.13) |
+| Catégories personnelles (CRUD, classement, listes, transaction §4.F) | ✅ livrées et commitées (M1.14) |
+| Alertes e-mail quotidiennes (génération, outbox, envoi, reprise, scheduler) | ✅ livrées et commitées (M5) |
 | Déploiement `/web` | ❌ prérequis manuels ISPConfig |
+| Migrations métier sur `veille_db` | ❌ en attente d'autorisation explicite |
 
 ## 7. Tests
 
@@ -174,9 +186,25 @@ avant tout commit.
 
 ## 8. Git
 
-Branche : `main` — dernier commit `1434635`.
+Branche : `main` — dernier commit `4f3bc92`, synchronisé avec
+`origin/main`.
 
 ```
+4f3bc92 docs: handover for M5                                   ┐
+07577b8 test: cover digest generation and outbox                │
+ef141f1 feat: add digest outbox and mail delivery               │ M5
+6366dbd feat: generate daily digests                            │
+c8a5326 feat: serialize article_veille writes                   │
+80a4eea feat: add match watermark for digest cursors            ┘
+d3a49eb docs: update project handover for M1.14                 ┐
+c686cc4 test: cover personal article categories                 │
+d2c2664 feat: add category management interface                 │ M1.14
+5f34c7a feat: add personal article categories                   ┘
+f23c364 docs: update project handover for M1.13                 ┐
+6c181fa test: cover personal article states                     │
+423785d feat: add personal article actions and spaces           │ M1.13
+98b3897 feat: add per-user article state services               ┘
+8e8b612 docs: update project handover for M1.12                 ← M1.12 (consolidé et publié)
 1434635 docs: update project handover for veilles module        ← M1.11
 9463e8b feat: match articles during RSS feed collection         ← M1.11.4
 1200042 feat: add veille CRUD with keyword and source management ← M1.11.2
@@ -204,11 +232,10 @@ a91098b docs: define Git workflow rules
 ```
 
 - Remote : `origin = https://github.com/nekzeen/veille.git` —
-  **`origin/main` existe et pointe sur `1434635`** (push effectué hors
-  session Devin) ; branche locale `main` **synchronisée** avec
-  `origin/main` — vérifié le 2026-11-03 (`for-each-ref` +
-  `ls-remote`, 0 commit d'écart). Tout push futur reste soumis à
-  validation explicite de Gaël.
+  **`origin/main` pointe sur `4f3bc92`** ; branche locale `main`
+  **synchronisée** avec `origin/main` (vérifié le 2026-11-05, M1.12
+  à M5 poussés par Gaël). Tout push futur reste soumis à validation
+  explicite de Gaël.
 - `.env`, `vendor/`, `node_modules/`, `public/build/` : ignorés, jamais
   commités.
 - **Travaux M1.10.2.x–M1.10.3.2 (audités)** : `composer.json` +
@@ -250,9 +277,9 @@ Roadmap.md, le module Sources correspond au jalon M2) :
 — conception autonome et complète, vérifiée contre le code réel et les
 sources `ezyang/htmlpurifier` v4.19.1.
 
-**État actuel** : **implémentée, testée et auditée — en attente de
-consolidation Git** (aucun commit/push sans autorisation). Travaux
-réalisés en sous-missions : M1.12.1 dépendance + cache, M1.12.2
+**État actuel** : **implémentée, testée, auditée, consolidée et
+publiée** (commit `8e8b612` et précédents). Travaux réalisés en
+sous-missions : M1.12.1 dépendance + cache, M1.12.2
 `ImageUrlPolicy`, M1.12.3 `HtmlContentSanitizer`, M1.12.4 lecture
 (query/contrôleur/routes/vues/CSP), M1.12.5 audit final + doc.
 
@@ -293,12 +320,12 @@ combinés, `"0"`, paramètres malformés, sanitisation rendue, payloads
 malveillants, fallback, prev/next filtrés, retour contexte, images
 DNS-stub, CSP ×2) ; total **578/1640 bi-moteur**.
 
-### M1.13.1 — État lu / non lu (implémenté, non commité)
+### M1.13.1 — État lu / non lu (implémenté, publié)
 
 **Référence** : DataModel.md §3.9 et §4.D-bis/§4.E.
 
-**État** : implémenté et testé — **non commité** (autorisation
-requise). `app/Models/ArticleUser.php` (PK composite
+**État** : implémenté, testé, **commité et publié**
+(`98b3897`/`423785d`/`6c181fa`/`f23c364`). `app/Models/ArticleUser.php` (PK composite
 `(user_id, article_id)` — `setKeysForSaveQuery` comme `ArticleVeille`),
 `database/factories/ArticleUserFactory.php`,
 `app/Services/Articles/ArticleReadState.php` (`isRead`, `markRead`
@@ -313,12 +340,12 @@ issu de l'utilisateur authentifié. Aucune migration.
 favori/note, article_veille intacts, GET refusé, user_id injecté
 ignoré).
 
-### M1.13.2 — Favoris (implémenté, non commité)
+### M1.13.2 — Favoris (implémenté, publié)
 
 **Référence** : DataModel.md §3.9, §4.D-bis, §4.E.
 
-**État** : implémenté et testé — **non commité** (avec M1.13.1,
-autorisation requise). `ArticleUser::hasPersonalDataBesides()`
+**État** : implémenté, testé, **commité et publié** (mêmes commits
+que M1.13.1). `ArticleUser::hasPersonalDataBesides()`
 factorise la règle « ligne vide » (réutilisée par lu/non lu et
 favoris) ; `app/Services/Articles/ArticleFavoriteState.php`
 (`isFavorite`, `markFavorite` upsert, `removeFavorite` = DELETE si
@@ -336,11 +363,12 @@ vues `favorites/{index,show}` + toggles dans les pages veille + lien
 note/catégorie/lu, survie à la suppression de correspondance, 404
 article d'autrui, tri/pagination).
 
-### M1.13.3 — Notes personnelles (implémenté, non commité)
+### M1.13.3 — Notes personnelles (implémenté, publié)
 
 **Référence** : DataModel.md §3.9, §4.D-bis, §4.E.
 
-**État** : implémenté et testé — **non commité** (avec M1.13.1–13.2).
+**État** : implémenté, testé, **commité et publié** (mêmes commits
+que M1.13.1).
 `app/Services/Articles/ArticleNoteState.php` (`getNote`, `saveNote`
 trim + upsert — vide/espaces = absence, `deleteNote` = NULL puis
 DELETE si ligne vide via `hasPersonalDataBesides`) ; mutations note
@@ -354,11 +382,12 @@ Feature (CRUD, vide=absence, isolation stricte, préservation
 lu/favori/catégorie, survie sans `article_veille`, anti-purge,
 `user_id` injecté ignoré).
 
-### M1.13.4 — Archivage personnel (implémenté, non commité)
+### M1.13.4 — Archivage personnel (implémenté, publié)
 
 **Référence** : DataModel.md §3.9, §4.D-bis, §4.E.
 
-**État** : implémenté et testé — **non commité** (avec M1.13.1–13.3).
+**État** : implémenté, testé, **commité et publié** (mêmes commits
+que M1.13.1).
 `app/Services/Articles/ArticleArchiveState.php` (`isArchived`,
 `archive` upsert, `unarchive` = DELETE si ligne vide via
 `hasPersonalDataBesides` sinon `is_archived=0`, `archiveMap`,
@@ -374,11 +403,12 @@ toggle dans la fiche personnelle, page `archives/index` + lien nav
 veille+favoris, survie sans `article_veille`, purgeable seul vs
 protégé par favori/note, pagination, `user_id` injecté ignoré).
 
-### M1.14.1 — Catégories : modèle + service (implémenté, non commité)
+### M1.14.1 — Catégories : modèle + service (implémenté, publié)
 
 **Référence** : DataModel.md §3.9/§3.10, §4.D-bis, §4.E, §4.F.
 
-**État** : implémenté et testé — **non commité**. `app/Models/Category.php`
+**État** : implémenté, testé, **commité et publié**
+(`5f34c7a`/`d2c2664`/`c686cc4`/`d3a49eb`). `app/Models/Category.php`
 (fillable `user_id`/`name`, relation `articleUsers()` — jointage sur
 `category_id` suffisant car `UNIQUE(user_id,id)` + FK composite portent
 le tenant), `database/factories/CategoryFactory.php`,
@@ -394,9 +424,10 @@ garde-fou), `setCategory` (catégorie du user + `hasAccess` requis →
 refusé, préservation des états, élagage, transaction, compteur
 masqué-archivés). Aucune migration, aucun contrôleur/route/vue.
 
-### M1.14.2 — Catégories : interface (implémenté, non commité)
+### M1.14.2 — Catégories : interface (implémenté, publié)
 
-**État** : implémenté et testé — **non commité** (avec M1.14.1).
+**État** : implémenté, testé, **commité et publié** (mêmes commits
+que M1.14.1).
 `app/Http/Controllers/CategoryController.php` : `GET/POST /categories`,
 `PATCH/DELETE /categories/{category}` (`own()` → 404 cross-tenant),
 `GET /categories/{category}/articles` (20/page, tri §4.E, archivés
@@ -414,9 +445,10 @@ transaction de suppression).
 M1.14.1→M1.14.3 : revue + consolidation Git effectuées et publiées
 (`5f34c7a`/`d2c2664`/`c686cc4`/`d3a49eb`).
 
-### M5.2 — Génération des digests (implémenté, non commité)
+### M5.2 — Génération des digests (implémenté, publié)
 
-**État** : implémenté et testé — **non commité**. Conception M5.1
+**État** : implémenté, testé, **commité et publié** (`80a4eea`→
+`4f3bc92`). Conception M5.1
 verrouillée : curseur mécanique `article_veille.id` (ordre total,
 égalités de timestamp impossibles), protocole de verrou `veilles`
 FOR UPDATE rendant le watermark étanche (ordre de verrou = ordre
@@ -443,9 +475,10 @@ Tests : 14 Feature génération + 7 Feature concurrence **MariaDB
 réelle** (connexion auxiliaire : générateur bloqué par le verrou
 puis voyant la ligne commitée — le scénario de perte historique).
 
-### M5.3 — Outbox, envoi et reprise (implémenté, non commité)
+### M5.3 — Outbox, envoi et reprise (implémenté, publié)
 
-**État** : implémenté et testé — **non commité** (avec M5.2).
+**État** : implémenté, testé, **commité et publié** (mêmes commits
+que M5.2).
 
 - `app/Jobs/SendVeilleDigestJob.php` : réservation atomique
   `pending → processing` (bail 10 min, `attempts<3`, token UUID) ;
@@ -470,7 +503,7 @@ puis voyant la ligne commitée — le scénario de perte historique).
 Tests : 17 Feature outbox (Mail::fake) + scheduler — les tests de
 concurrence MariaDB M5.2 couvrent déjà le verrou.
 
-### M5.6 — Revue globale (effectuée, non commitée)
+### M5.6 — Revue globale (effectuée, publiée)
 
 M5.4 (mailable HTML+texte) et M5.5 (scheduler + doc) absorbés dans
 M5.3. Revue croisée : **deux corrections mineures** —
@@ -488,23 +521,39 @@ verrou + curseur `article_veille.id`, ≤50) → `pending` →
 atomique token, bail 10 min, 3 tentatives) → `VeilleDigestMail`
 → `sent`/`failed`. Livraison au moins une fois assumée.
 
-**Prochaine action précise** : consolidation Git de tout M5
-(découpage validé avec Gaël : modèle+writer / génération /
-outbox+mail / scheduler+tests / docs).
+M5 consolidé en 6 commits et publié (`80a4eea`→`4f3bc92`).
 
-**Consignes de continuité — futures sessions Devin (M1.12)** :
+## 10. Prochaine étape proposée — préparation au déploiement
 
-- Avant toute intervention : lire `AGENTS.md`, puis `REPRISE_PROJET.md`,
-  puis `M1.12_Conception_Technique.md` ; vérifier l'état Git réel.
-- Les documents de référence priment sur les suppositions tirées d'une
-  nouvelle conversation — ne pas reprendre les travaux déjà validés.
-- Ne pas modifier le périmètre sans autorisation ; ne pas créer de
-  commit ni pousser sans autorisation explicite de Gaël.
+Le périmètre fonctionnel du MVP est désormais complet et publié.
+La suite logique n'est plus une fonctionnalité mais la **mise en
+production**, sous réserve des validations de Gaël :
 
-Puis `article_user` (lu/non lu), favoris, notes, catégories (M4) et
-alertes e-mail (M5).
+1. **Audit de préparation au déploiement** : inventaire des
+   prérequis restants (`.env` de production, `APP_DEBUG=false`,
+   `MAIL_MAILER=sendmail`, caches `config:cache`/`route:cache`/
+   `view:cache`, build Vite `npm ci && npm run build` sous Node 22
+   nvm).
+2. **Vérification de l'environnement de production** : PHP-FPM 8.3,
+   extensions requises, permissions `storage/`, cron `schedule:run`
+   déjà installé, délivrabilité mail (sendmail/Postfix, SPF/DKIM du
+   domaine à confirmer par Gaël).
+3. **Préparation de l'exposition `/web`** : procédure prête dans
+   Deployment.md (index.php, .htaccess, symlinks `build`/`storage`)
+   — aucune écriture dans `/web` hors procédure validée.
+4. **Stratégie de migration de la base** : les **12 migrations
+   métier** (dont les 2 M5) sont `Pending` sur `veille_db` — leur
+   exécution nécessite **l'autorisation explicite de Gaël** ; ordre
+   et rollback décrits dans MigrationPlan.md ; sauvegarde préalable
+   à prévoir.
+5. **Recette fonctionnelle** : checklist navigateur — inscription,
+   ajout de source, collecte réelle, création de veille, lecture,
+   favoris/notes/catégories/archives, activation `alerts_enabled`
+   et réception d'un premier digest.
 
-## 10. Règles de travail avec Devin
+## 11. Règles de travail avec Devin
+
+## 11. Règles de travail avec Devin
 
 - **Une mission à la fois** ; prompts ciblés, optimisés en coût.
 - **Lire les documents pertinents avant d'intervenir** (AGENTS.md en
@@ -538,16 +587,7 @@ alertes e-mail (M5).
 - `Source::create()` reçoit `created_at`/`updated_at` non fillables
   (ignorés par `fill()`) — les auto-timestamps Eloquent écrivent en UTC
   de fait ; code à nettoyer à l'occasion (relève de l'audit M1.9.4).
-- Travaux M1.12 non commités (audit M1.12.5) : `M composer.json`,
-  `M composer.lock`, `M routes/web.php`,
-  `M resources/views/veilles/show.blade.php`,
-  `M storage/app/.gitignore`, `M REPRISE_PROJET.md` ; non suivis :
-  `M1.12_Conception_Technique.md`, `app/Services/Articles/`,
-  `app/Http/Controllers/VeilleArticleController.php`,
-  `app/Http/Middleware/ArticleCsp.php`,
-  `resources/views/veilles/articles/`,
-  `storage/app/htmlpurifier/.gitignore`, trois fichiers de tests M1.12.
-- Recette navigateur réelle M1.12 : non exécutée (pas de navigateur
+- Recette navigateur réelle : non exécutée (pas de navigateur
   dans l'environnement) — vérification manuelle requise au déploiement
   (voir §9 : liste, filtres, pagination, lecture, prev/next, Alpine.js
   sous CSP).

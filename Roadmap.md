@@ -12,7 +12,7 @@ satisfaits avant de passer à la suivante.
 - [x] Décisions d'architecture validées.
 - [ ] Création de la base MariaDB + utilisateur (panneau ISPConfig) — **action manuelle requise avant M1**.
 
-## M1 — Socle applicatif
+## M1 — Socle applicatif ✅ (code) / ⬜ (mise en production)
 
 **Objectif** : une application Laravel vierge, déployée et accessible en HTTPS.
 
@@ -31,13 +31,13 @@ satisfaits avant de passer à la suivante.
 
 **Critères de validation**
 
-- `https://veille.gaelmorvan.fr` répond 200 en HTTPS, HTTP redirige vers HTTPS.
-- Inscription → connexion → déconnexion fonctionnelles en production.
-- `php artisan test` vert ; `pint --test` et `phpstan` sans erreur.
-- Aucun fichier privé (`.env`, `storage/`, `vendor/`) accessible par HTTP.
-- Migrations appliquées en base sans erreur.
+- `https://veille.gaelmorvan.fr` répond 200 en HTTPS, HTTP redirige vers HTTPS. ⬜ non vérifié — `/web` non exposé
+- Inscription → connexion → déconnexion fonctionnelles en production. ⬜ non vérifié
+- `php artisan test` vert ; `pint --test` et `phpstan` sans erreur. ✅
+- Aucun fichier privé (`.env`, `storage/`, `vendor/`) accessible par HTTP. ⬜ non vérifié
+- Migrations appliquées en base sans erreur. ⬜ `veille_db` en attente d'autorisation
 
-## M2 — Sources
+## M2 — Sources ✅ (M1.9 + M1.10)
 
 **Objectif** : les utilisateurs ajoutent et valident des flux RSS/Atom.
 
@@ -45,7 +45,7 @@ satisfaits avant de passer à la suivante.
 - CRUD sources personnelles avec validation du flux (SimplePie, SSRF guard).
 - Commande `feeds:fetch` + `FetchFeedJob` (queue `database`).
 - GET conditionnel (ETag / Last-Modified), gestion d'erreurs + backoff.
-- Stockage `items` avec dédoublonnage.
+- Stockage `articles` avec dédoublonnage (`dedup_key`).
 
 **Critères de validation**
 
@@ -56,15 +56,16 @@ satisfaits avant de passer à la suivante.
 - Flux en échec répété → backoff puis désactivation propre (pas de boucle
   d'erreurs).
 
-## M3 — Veilles
+## M3 — Veilles ✅ (M1.11 + M1.12)
 
 **Objectif** : créer des veilles (nom + mots-clés + sources) et voir les
 articles correspondants.
 
 - CRUD veilles + mots-clés + association de sources.
-- `KeywordMatcher` → remplissage `item_veille` à l'ingestion et lors de la
-  modification d'une veille (rematching).
-- Page de lecture d'une veille : liste paginée, triée par date.
+- `KeywordMatcher` → remplissage `article_veille` à l'ingestion et lors
+  de la modification d'une veille (`VeilleRematcher`).
+- Page de lecture d'une veille : liste paginée, triée par date,
+  lecture interne assainie (HTMLPurifier), prev/next, CSP.
 
 **Critères de validation**
 
@@ -72,34 +73,48 @@ articles correspondants.
 - Modification des mots-clés → liste mise à jour.
 - Deux veilles différentes sur la même source restent indépendantes.
 
-## M4 — Lecture et organisation
+## M4 — Lecture et organisation ✅ (M1.13 + M1.14)
 
 **Objectif** : favoris, notes, catégories, marquage lu/non lu.
 
-- `item_user` : toggle lu/non lu, favori, note (édition inline Alpine.js).
-- CRUD catégories ; classement des veilles et/ou favoris.
-- Politique de rétention/purge des articles (décision à prendre en M4).
+- `article_user` : toggle lu/non lu, favori, note, archivage.
+- Espaces personnels : « Mes favoris », « Mes archives »,
+  « Mes catégories ».
+- CRUD catégories ; classement/retrait d'articles depuis les fiches
+  veille et favoris ; liste d'articles par catégorie.
+- Politique de rétention/purge des articles : six mois (§4.E du
+  DataModel) ; favori, note, catégorie ou accès personnel protègent.
 
 **Critères de validation**
 
-- Marquer lu / favori / noter persiste par utilisateur, indépendamment des
-  autres utilisateurs abonnés au même article.
-- Les notes ne sont jamais visibles hors de l'espace propriétaire (test de
-  Policy).
+- Marquer lu / favori / noter persiste par utilisateur, indépendamment
+  des autres utilisateurs abonnés au même article.
+- Les notes ne sont jamais visibles hors de l'espace propriétaire
+  (tests de Policy/isolation).
+- Articles archivés masqués des listes ordinaires, accessibles via
+  « Mes archives ».
 
-## M5 — Alertes e-mail
+## M5 — Alertes e-mail ✅ (M5.1–M5.6)
 
-**Objectif** : notifications périodiques par veille.
+**Objectif** : digest quotidien par veille.
 
-- `alert_frequency` par veille + `SendAlertJob` + Notification Laravel.
-- E-mail HTML/texte listant les nouveaux articles.
-- Vérification de la délivrabilité (SPF/DKIM du domaine).
+- `alerts_enabled` par veille ; génération `alerts:generate` à 06:30
+  Europe/Paris (curseur fiable `article_veille.id` sous verrou
+  `veilles`, ≤50 articles, jamais de digest vide).
+- Outbox `veille_alerts` : réservation atomique (bail 10 min, token,
+  3 tentatives), distribution `alerts:distribute`, reprise
+  `alerts:sweep`, envoi `SendVeilleDigestJob` + `VeilleDigestMail`
+  (HTML/texte).
+- Vérification de la délivrabilité (SPF/DKIM du domaine) — **action
+  manuelle restante côté Postfix/domaine**.
 
 **Critères de validation**
 
-- Une veille en fréquence `daily` génère un e-mail reçu, listant les bons
-  articles, une seule fois par période.
-- `alert_frequency = none` → aucun envoi.
+- Une veille avec `alerts_enabled` génère un e-mail listant les
+  nouveaux articles, une fois par jour civil Europe/Paris.
+- `alerts_enabled` désactivé → aucun envoi.
+- Livraison au moins une fois (doublon résiduel accepté en cas de
+  crash entre envoi et clôture).
 
 ## Post-MVP (ordre indicatif)
 
@@ -113,6 +128,24 @@ articles correspondants.
 | Page "tous les non lus" unifiée | Confort Inoreader-like |
 | Suggestions de sources / découverte | Croissance du catalogue |
 | Vue statistiques de veille | Pilotage |
+
+## Prochaine étape — préparation au déploiement (proposée)
+
+Toutes les fonctionnalités du MVP sont implémentées et publiées
+(jusqu'à `4f3bc92`). La suite n'est pas un nouveau jalon officiel
+mais la mise en production, qui reste soumise aux validations de
+Gaël :
+
+1. Audit de préparation au déploiement (`.env` prod, caches, build
+   Vite).
+2. Vérification de l'environnement de production (PHP-FPM,
+   extensions, permissions, cron, mail sendmail/SPF-DKIM).
+3. Exposition `/web` selon Deployment.md (aucune écriture hors
+   procédure validée).
+4. **Migrations métier sur `veille_db` : autorisation explicite de
+   Gaël requise** (12 migrations en attente, sauvegarde préalable).
+5. Recette fonctionnelle navigateur (inscription → source →
+   collecte → veille → lecture → digest).
 
 ## Dépendances critiques entre missions
 
