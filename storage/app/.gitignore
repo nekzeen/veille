@@ -1,4 +1,5 @@
 *
+!htmlpurifier/
 !private/
 !public/
 !.gitignore
