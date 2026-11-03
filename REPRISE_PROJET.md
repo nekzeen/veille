@@ -1,10 +1,12 @@
 # Reprise du projet Veille
 
 > Document d'accueil pour une nouvelle session de développement.
-> État vérifié le 2026-11-08 (branche `main`) ; collecteur RSS/Atom
+> État vérifié le 2026-11-03 (branche `main`) ; collecteur RSS/Atom
 > complet et planifié (M1.10.5.x), voir
-> `Orchestration_Collecteur_RSS.md` ; module Veilles livré
-> (M1.11.1–M1.11.5, en attente de commit), voir §9.
+> `Orchestration_Collecteur_RSS.md` ; module Veilles livré et commité
+> (M1.11.1–M1.11.5), voir §9 ; lecture des articles M1.12 implémentée
+> et auditée, en attente de consolidation Git, voir §9 et
+> `M1.12_Conception_Technique.md`.
 > **À lire après `AGENTS.md`** — celui-ci reste la référence des
 > interdictions et règles non négociables.
 
@@ -142,8 +144,9 @@ Décisions structurantes :
 | **Collecte effective des flux** : client HTTP `SecureFeedClient` + parseur `SimplePieFeedParser` | ✅ livrés (M1.10.2.x–M1.10.3.2) |
 | Orchestration collecte (`ArticleUpsertService`, `FetchFeedJob`, `feeds:fetch`, scheduler, verrous P6/P7) | ✅ livrée et testée bout-en-bout (M1.10.4–M1.10.5) |
 | Cron ISPConfig `schedule:run` chaque minute | ✅ installé, exécution confirmée |
-| **Module Veilles** : modèles+FK composites (M1.11.1), CRUD+Policy (M1.11.2), `KeywordMatcher` (M1.11.3), intégration `FetchFeedJob` (M1.11.4), `VeilleRematcher`+`veilles:rematch` (M1.11.5) | ✅ livré, en attente de commit |
-| Page de lecture des articles, favoris/notes/catégories, alertes | ❌ postérieurs |
+| **Module Veilles** : modèles+FK composites (M1.11.1), CRUD+Policy (M1.11.2), `KeywordMatcher` (M1.11.3), intégration `FetchFeedJob` (M1.11.4), `VeilleRematcher`+`veilles:rematch` (M1.11.5) | ✅ livré et commité |
+| Page de lecture des articles par veille (liste filtrée, pagination, lecture interne assainie, prev/next, CSP) | ✅ implémentée et testée (M1.12) — **non commitée** (§9) |
+| Favoris/notes/catégories, alertes | ❌ postérieurs |
 | Déploiement `/web` | ❌ prérequis manuels ISPConfig |
 
 ## 7. Tests
@@ -152,12 +155,14 @@ Résultats vérifiés (ne pas extrapoler) :
 
 - **25 tests initiaux** (Breeze : auth, profil, exemples) — validés
   SQLite et MariaDB en M1.8.
-- **455 tests** (1320 assertions) après le module Veilles
-  (M1.11.1–M1.11.5) — verts sur SQLite (`php artisan test`) et sur
-  MariaDB `veille_test` (`-c phpunit.mariadb.xml`) ; bi-moteur
-  vérifié le 2026-11-08.
+- **578 tests** (1640 assertions) après M1.12 — verts sur SQLite
+  (`php artisan test`) et sur MariaDB `veille_test`
+  (`-c phpunit.mariadb.xml`) ; bi-moteur vérifié le 2026-11-03
+  (recette M1.12.5).
 - `./vendor/bin/phpstan analyse` : **aucune erreur** (Larastan).
 - `./vendor/bin/pint --test` : **passed**.
+- `composer validate` : **valid** ; `composer audit` : aucune
+  vulnérabilité connue.
 - Les migrations métier n'ont été exécutées que sur `veille_test`.
 
 Commandes : `php artisan test` · `php artisan test -c
@@ -167,9 +172,24 @@ avant tout commit.
 
 ## 8. Git
 
-Branche : `main` — dernier commit `c1588e4`.
+Branche : `main` — dernier commit `1434635`.
 
 ```
+1434635 docs: update project handover for veilles module        ← M1.11
+9463e8b feat: match articles during RSS feed collection         ← M1.11.4
+1200042 feat: add veille CRUD with keyword and source management ← M1.11.2
+7185b38 feat: add veille rematcher and rematch command          ← M1.11.5
+0445a73 feat: add keyword matcher service                       ← M1.11.3
+0200653 feat: add veille models with tenant isolation           ← M1.11.1
+d74bd12 docs: add RSS collector orchestration and update handover
+fa27b14 test: add integrated RSS collector tests                ┐
+063f980 feat: add RSS collector scheduler                       │
+9eadea7 feat: add feed collection dispatch command              │ M1.10
+8b019e6 feat: add RSS feed fetch job                            │ (détail dans
+a9ff061 feat: add article deduplication and persistence         │  Orchestration_
+3268cba feat: add SSRF-hardened feed HTTP client                │  Collecteur_RSS.md)
+46cc76c feat: add SimplePie RSS/Atom parser                     │
+9748b9f build: require simplepie/simplepie 1.9                  ┘
 c1588e4 docs: add project handover document                     ← reprise
 9e47ca1 feat: add source catalogue and personal subscriptions   ← M1.9
 6504116 test: add MariaDB PHPUnit configuration                 ← M1.8
@@ -182,8 +202,11 @@ a91098b docs: define Git workflow rules
 ```
 
 - Remote : `origin = https://github.com/nekzeen/veille.git` —
-  `origin/main` **inexistante** : les commits sont locaux, **jamais
-  poussés** (push uniquement sur validation explicite de Gaël).
+  **`origin/main` existe et pointe sur `1434635`** (push effectué hors
+  session Devin) ; branche locale `main` **synchronisée** avec
+  `origin/main` — vérifié le 2026-11-03 (`for-each-ref` +
+  `ls-remote`, 0 commit d'écart). Tout push futur reste soumis à
+  validation explicite de Gaël.
 - `.env`, `vendor/`, `node_modules/`, `public/build/` : ignorés, jamais
   commités.
 - **Travaux M1.10.2.x–M1.10.3.2 (audités)** : `composer.json` +
@@ -219,11 +242,71 @@ Roadmap.md, le module Sources correspond au jalon M2) :
 | M1.11.4 | Matching dans `FetchFeedJob` sur les articles du lot (`ArticleUpsertResult::articleIds`) ; erreur matcher journalisée, collecte préservée |
 | M1.11.5 | `VeilleRematcher` (diff d'ensembles, fenêtre 6 mois `COALESCE(published_at, collected_at)`) + `veilles:rematch {--veille=}` ; câblé post-commit dans `VeilleService` (create/update-règles/réactivation) |
 
-**Prochaine étape — page de lecture des articles par veille** (reste du
-jalon M3 de Roadmap.md) : liste paginée triée par date, périmètre
-`article_veille` ∩ fenêtre de rétention. Puis `article_user` (lu/non
-lu), favoris, notes, catégories (M4) et alertes e-mail (M5).
-Consolidation Git des 35 entrées en attente à effectuer après revue.
+### M1.12 — Lecture des articles d'une veille (implémentée, auditée)
+
+**Référence technique** : [`M1.12_Conception_Technique.md`](M1.12_Conception_Technique.md)
+— conception autonome et complète, vérifiée contre le code réel et les
+sources `ezyang/htmlpurifier` v4.19.1.
+
+**État actuel** : **implémentée, testée et auditée — en attente de
+consolidation Git** (aucun commit/push sans autorisation). Travaux
+réalisés en sous-missions : M1.12.1 dépendance + cache, M1.12.2
+`ImageUrlPolicy`, M1.12.3 `HtmlContentSanitizer`, M1.12.4 lecture
+(query/contrôleur/routes/vues/CSP), M1.12.5 audit final + doc.
+
+**Fichiers livrés** : `composer.json`/`composer.lock`
+(`ezyang/htmlpurifier` **v4.19.1**, seule dépendance) ;
+`app/Services/Articles/{ImageUrlPolicy,HtmlContentSanitizer,VeilleArticleQuery}.php` ;
+`app/Http/Controllers/VeilleArticleController.php` ;
+`app/Http/Middleware/ArticleCsp.php` ; `routes/web.php` (2 routes
+`auth` + CSP) ; `resources/views/veilles/articles/{index,show}.blade.php`
++ lien « Articles » dans `veilles/show.blade.php` ;
+`storage/app/.gitignore` (exception `!htmlpurifier/`) +
+`storage/app/htmlpurifier/.gitignore` (contenu du cache ignoré) ;
+`tests/Unit/{ImageUrlPolicyTest,HtmlContentSanitizerTest}.php` ;
+`tests/Feature/VeilleArticlesTest.php`. Aucune migration.
+
+**Sécurité appliquée** : isolation policy `view` + `user_id` du pivot
+`article_veille` (jamais issu de la requête) ; association + rétention
+6 mois vérifiées en une requête → **404** ; liste blanche validée des
+paramètres (`source_id`, `keyword`, `page`, `"0"` conservé) ; HTML
+assaini whitelist + post-passe DOM fail-closed ; URL d'images validées
+(IP littérales avant IDN, noms locaux, DNS fail-closed, plafonds
+50 images/25 hôtes) ; lien original http(s) uniquement, `target=_blank
+rel="noopener noreferrer"` ; CSP complète sur les deux routes.
+Limites résiduelles assumées et documentées : DNS rebinding /
+split-horizon, redirections HTTP suivies par le navigateur (§6.3–§6.4
+de la conception) — cohérentes avec le choix de chargement direct.
+
+**Corrections d'audit (M1.12.5)** : schéma du lien original validé à
+l'affichage (`javascript:` impossible dans `href`) ; `wherePivot`
+via `when` produisait un where dynamique `"pivot" = ?` → filtres
+appliqués directement sur la relation ; ordre de config purifier
+(finalisation) et `null`-guard `maybeGetRawHTMLDefinition` corrigés
+en M1.12.3.
+
+**Tests** : 85 nouveaux tests ciblés (Unit : politique d'images 64,
+sanitizer 21 ; Feature : 38 — isolation, 404, rétention, tri, filtres
+combinés, `"0"`, paramètres malformés, sanitisation rendue, payloads
+malveillants, fallback, prev/next filtrés, retour contexte, images
+DNS-stub, CSP ×2) ; total **578/1640 bi-moteur**.
+
+**Prochaine action précise** : consolidation Git — proposition en 4
+commits logiques (dépendance+cache, politique d'images, sanitizer,
+lecture+docs) soumise à validation de Gaël, puis `article_user`
+(lu/non lu), favoris, notes, catégories (M4), alertes e-mail (M5).
+
+**Consignes de continuité — futures sessions Devin (M1.12)** :
+
+- Avant toute intervention : lire `AGENTS.md`, puis `REPRISE_PROJET.md`,
+  puis `M1.12_Conception_Technique.md` ; vérifier l'état Git réel.
+- Les documents de référence priment sur les suppositions tirées d'une
+  nouvelle conversation — ne pas reprendre les travaux déjà validés.
+- Ne pas modifier le périmètre sans autorisation ; ne pas créer de
+  commit ni pousser sans autorisation explicite de Gaël.
+
+Puis `article_user` (lu/non lu), favoris, notes, catégories (M4) et
+alertes e-mail (M5).
 
 ## 10. Règles de travail avec Devin
 
@@ -259,3 +342,16 @@ Consolidation Git des 35 entrées en attente à effectuer après revue.
 - `Source::create()` reçoit `created_at`/`updated_at` non fillables
   (ignorés par `fill()`) — les auto-timestamps Eloquent écrivent en UTC
   de fait ; code à nettoyer à l'occasion (relève de l'audit M1.9.4).
+- Travaux M1.12 non commités (audit M1.12.5) : `M composer.json`,
+  `M composer.lock`, `M routes/web.php`,
+  `M resources/views/veilles/show.blade.php`,
+  `M storage/app/.gitignore`, `M REPRISE_PROJET.md` ; non suivis :
+  `M1.12_Conception_Technique.md`, `app/Services/Articles/`,
+  `app/Http/Controllers/VeilleArticleController.php`,
+  `app/Http/Middleware/ArticleCsp.php`,
+  `resources/views/veilles/articles/`,
+  `storage/app/htmlpurifier/.gitignore`, trois fichiers de tests M1.12.
+- Recette navigateur réelle M1.12 : non exécutée (pas de navigateur
+  dans l'environnement) — vérification manuelle requise au déploiement
+  (voir §9 : liste, filtres, pagination, lecture, prev/next, Alpine.js
+  sous CSP).
