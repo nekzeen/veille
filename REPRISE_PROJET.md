@@ -155,13 +155,12 @@ Résultats vérifiés (ne pas extrapoler) :
 
 - **25 tests initiaux** (Breeze : auth, profil, exemples) — validés
   SQLite et MariaDB en M1.8.
-- **628 tests** (1818 assertions) après la revue de consolidation
-  M1.13.x — verts sur SQLite (`php artisan test`) et sur MariaDB
-  `veille_test` (`-c phpunit.mariadb.xml`) ; bi-moteur vérifié le
-  2026-11-03. La revue a extrait la règle d'accès autonome dans
+- **652 tests** (1904 assertions) après la revue M1.14.3 — verts sur SQLite
+  (`php artisan test`) et sur MariaDB `veille_test`
+  (`-c phpunit.mariadb.xml`) ; bi-moteur vérifié le 2026-11-03.
+  La revue M1.13.x a extrait la règle d'accès autonome dans
   `app/Services/Articles/ArticlePersonalAccess.php` (`hasAccess` —
-  partagée par favoris, notes, archives) et ajouté un test
-  d'interactions croisées des 4 états.
+  partagée par favoris, notes, archives).
 - `./vendor/bin/phpstan analyse` : **aucune erreur** (Larastan).
 - `./vendor/bin/pint --test` : **passed**.
 - `composer validate` : **valid** ; `composer audit` : aucune
@@ -375,9 +374,45 @@ toggle dans la fiche personnelle, page `archives/index` + lien nav
 veille+favoris, survie sans `article_veille`, purgeable seul vs
 protégé par favori/note, pagination, `user_id` injecté ignoré).
 
-**Prochaine action précise** : consolidation Git de M1.13.x sur
-validation de Gaël, puis catégories (M4) et alertes e-mail (M5).
-Page « Mes notes » : reste possible pour une mission ultérieure.
+### M1.14.1 — Catégories : modèle + service (implémenté, non commité)
+
+**Référence** : DataModel.md §3.9/§3.10, §4.D-bis, §4.E, §4.F.
+
+**État** : implémenté et testé — **non commité**. `app/Models/Category.php`
+(fillable `user_id`/`name`, relation `articleUsers()` — jointage sur
+`category_id` suffisant car `UNIQUE(user_id,id)` + FK composite portent
+le tenant), `database/factories/CategoryFactory.php`,
+`app/Services/Articles/ArticleCategoryState.php` :
+`categories(user)` (tri par nom + `articles_count` non archivés),
+`create`/`rename` (trim, obligatoire, ≤100, `unique` scopé user +
+`UniqueConstraintViolationException` → `ValidationException`, jamais de
+fusion), `delete` (**transaction §4.F** : NULL-out des lignes du
+propriétaire → élagage des lignes vidées → `DELETE`, RESTRICT en
+garde-fou), `setCategory` (catégorie du user + `hasAccess` requis →
+`ModelNotFoundException` sinon), `clearCategory` (NULL puis prune via
+`hasPersonalDataBesides`). 12 tests Feature (unicité, cross-tenant
+refusé, préservation des états, élagage, transaction, compteur
+masqué-archivés). Aucune migration, aucun contrôleur/route/vue.
+
+### M1.14.2 — Catégories : interface (implémenté, non commité)
+
+**État** : implémenté et testé — **non commité** (avec M1.14.1).
+`app/Http/Controllers/CategoryController.php` : `GET/POST /categories`,
+`PATCH/DELETE /categories/{category}` (`own()` → 404 cross-tenant),
+`GET /categories/{category}/articles` (20/page, tri §4.E, archivés
+masqués), `PUT/DELETE /articles/{a}/category` (`hasAccess` +
+`ownCategory` → 404) ; mutations équivalentes dans
+`VeilleArticleController` via `mutateArticle` ; `articlesInCategory`
++ `categoryIdOf` ajoutés au service ; vues `categories/index` (CRUD
+inline + compteurs + erreurs `@error`) et `categories/articles`
+(liste type favoris) ; sélecteur « Classer/Retirer » sur les deux
+fiches article ; nav « Mes catégories ». 11 tests Feature (CRUD,
+unicité, cross-tenant → 404, préservation états, masquage archivés,
+pagination/tri, autonomie §4.D-bis, `user_id` injecté ignoré,
+transaction de suppression).
+
+**Prochaine action précise** : M1.14.3 — revue combinée +
+consolidation Git de M1.14.x.
 
 **Consignes de continuité — futures sessions Devin (M1.12)** :
 
