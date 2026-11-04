@@ -30,6 +30,9 @@
                     <x-nav-link :href="route('exclusions.index')" :active="request()->routeIs('exclusions.*')">
                         Mes exclusions
                     </x-nav-link>
+                    <x-nav-link :href="route('shares.index')" :active="request()->routeIs('shares.*')">
+                        Mes partages
+                    </x-nav-link>
                     <x-nav-link :href="route('sources.catalogue')" :active="request()->routeIs('sources.catalogue')">
                         Catalogue
                     </x-nav-link>
@@ -102,6 +105,9 @@
             </x-responsive-nav-link>
             <x-responsive-nav-link :href="route('exclusions.index')" :active="request()->routeIs('exclusions.*')">
                 Mes exclusions
+            </x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('shares.index')" :active="request()->routeIs('shares.*')">
+                Mes partages
             </x-responsive-nav-link>
         </div>
 

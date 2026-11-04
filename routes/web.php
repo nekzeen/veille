@@ -6,12 +6,15 @@ use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FavoriteController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\PublicShareController;
 use App\Http\Controllers\SourceDetectionController;
 use App\Http\Controllers\UserExclusionController;
 use App\Http\Controllers\UserSourceController;
 use App\Http\Controllers\VeilleArticleController;
 use App\Http\Controllers\VeilleController;
+use App\Http\Controllers\VeilleShareController;
 use App\Http\Middleware\ArticleCsp;
+use App\Http\Middleware\ResolveShareToken;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -50,6 +53,11 @@ Route::middleware('auth')->group(function () {
     Route::put('/exclusions/{exclusion}', [UserExclusionController::class, 'update'])->name('exclusions.update');
     Route::patch('/exclusions/{exclusion}/toggle', [UserExclusionController::class, 'toggle'])->name('exclusions.toggle');
     Route::delete('/exclusions/{exclusion}', [UserExclusionController::class, 'destroy'])->name('exclusions.destroy');
+    Route::get('/shares', [VeilleShareController::class, 'index'])->name('shares.index');
+    Route::post('/shares', [VeilleShareController::class, 'store'])->name('shares.store');
+    Route::patch('/shares/{share}', [VeilleShareController::class, 'update'])->name('shares.update');
+    Route::post('/shares/{share}/rotate', [VeilleShareController::class, 'rotate'])->name('shares.rotate');
+    Route::delete('/shares/{share}', [VeilleShareController::class, 'destroy'])->name('shares.destroy');
     Route::delete('/veilles/{veille}', [VeilleController::class, 'destroy'])->name('veilles.destroy');
 
     // Lecture des articles (M1.12) — CSP renforcée sur les deux routes.
@@ -108,6 +116,13 @@ Route::middleware('auth')->group(function () {
         Route::delete('/articles/{article}/archive', [ArchiveController::class, 'unarchive'])
             ->name('articles.unarchive');
     });
+});
+
+// Consultation publique en lecture seule par jeton (M10.4) — hors auth.
+Route::middleware(['throttle:60,1', ResolveShareToken::class])->group(function () {
+    Route::get('/shared/{token}', [PublicShareController::class, 'index'])->name('shared.index');
+    Route::get('/shared/{token}/veilles/{veille}', [PublicShareController::class, 'veille'])->name('shared.veille');
+    Route::get('/shared/{token}/articles/{article}', [PublicShareController::class, 'article'])->name('shared.article');
 });
 
 require __DIR__.'/auth.php';

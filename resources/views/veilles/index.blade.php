@@ -47,6 +47,8 @@
                                     <div class="shrink-0 flex flex-wrap items-center gap-2">
                                         <a href="{{ route('veilles.edit', $veille) }}"
                                            class="text-sm text-indigo-600 hover:underline">Modifier</a>
+                                        <a href="{{ route('shares.index', ['veille' => $veille->id]) }}"
+                                           class="text-sm text-indigo-600 hover:underline">Partager</a>
                                         <form method="POST" action="{{ route('veilles.toggle', $veille) }}">
                                             @csrf
                                             @method('PATCH')
