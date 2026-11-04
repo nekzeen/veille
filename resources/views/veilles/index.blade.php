@@ -28,7 +28,7 @@
                                 <li class="py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                     <div class="min-w-0">
                                         <p class="font-medium text-gray-900">
-                                            <a href="{{ route('veilles.show', $veille) }}" class="hover:underline">
+                                            <a href="{{ route('veilles.articles.index', $veille) }}" class="hover:underline">
                                                 {{ $veille->name }}
                                             </a>
                                         </p>
