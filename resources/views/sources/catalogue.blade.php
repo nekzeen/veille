@@ -12,7 +12,7 @@
                 <div class="mb-4 p-4 bg-green-100 text-green-800 rounded-md">{{ session('status') }}</div>
             @endif
 
-            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+            <div class="bg-white overflow-hidden shadow sm:rounded-lg border border-slate-300">
                 <div class="p-6 text-gray-900">
 
                     <form method="GET" action="{{ route('sources.catalogue') }}" class="mb-6 flex flex-col gap-2 sm:flex-row">

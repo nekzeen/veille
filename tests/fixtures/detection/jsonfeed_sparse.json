@@ -1,0 +1,1 @@
+{"version":"https://jsonfeed.org/version/1","title":"Partiel","items":[{"url":"https://exemple.fr/a","title":"Sans id ni date"},{"id":"x","url":"javascript:alert(1)","title":"Lien dangereux","date_published":"pas une date"},{"id":"y","content_text":"Corps seul"}]}

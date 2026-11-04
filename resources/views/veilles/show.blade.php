@@ -24,7 +24,7 @@
                 <div class="p-4 bg-green-100 text-green-800 rounded-md">{{ session('status') }}</div>
             @endif
 
-            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+            <div class="bg-white overflow-hidden shadow sm:rounded-lg border border-slate-300">
                 <div class="p-6 text-gray-900 space-y-4">
                     @if ($veille->description)
                         <p class="text-gray-700">{{ $veille->description }}</p>
@@ -46,7 +46,7 @@
                         @else
                             <ul class="flex flex-wrap gap-2">
                                 @foreach ($veille->keywords as $keyword)
-                                    <li class="px-2 py-1 bg-indigo-50 text-indigo-800 text-xs rounded">
+                                    <li class="px-2 py-1 bg-chip text-indigo-800 text-xs rounded">
                                         {{ $keyword->term }}
                                     </li>
                                 @endforeach
@@ -74,7 +74,7 @@
                 </div>
             </div>
 
-            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+            <div class="bg-white overflow-hidden shadow sm:rounded-lg border border-slate-300">
                 <div class="p-6 flex flex-wrap items-center gap-4">
                     <form method="POST" action="{{ route('veilles.toggle', $veille) }}">
                         @csrf

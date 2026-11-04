@@ -5,14 +5,13 @@ namespace App\Jobs;
 use App\Models\Article;
 use App\Models\Source;
 use App\Services\Feed\ArticleUpsertService;
+use App\Services\Feed\Connectors\ConnectorRegistry;
+use App\Services\Feed\Connectors\ConnectorResult;
 use App\Services\Feed\Data\ArticleUpsertResult;
-use App\Services\Feed\Data\FeedFetchResult;
 use App\Services\Feed\Data\ParsedFeed;
 use App\Services\Feed\Exceptions\FeedFetchException;
 use App\Services\Feed\Exceptions\FeedHttpException;
 use App\Services\Feed\Exceptions\FeedParseException;
-use App\Services\Feed\FeedClientInterface;
-use App\Services\Feed\FeedParserInterface;
 use App\Services\KeywordMatcher;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -60,8 +59,7 @@ final class FetchFeedJob implements ShouldBeUnique, ShouldQueue
     }
 
     public function handle(
-        FeedClientInterface $client,
-        FeedParserInterface $parser,
+        ConnectorRegistry $connectors,
         ArticleUpsertService $upserter,
         KeywordMatcher $matcher,
     ): void {
@@ -81,7 +79,7 @@ final class FetchFeedJob implements ShouldBeUnique, ShouldQueue
             // collecter la source entre la vérification et l'acquisition.
             $source = $this->dueSource();
             if ($source !== null) {
-                $this->collect($source, $client, $parser, $upserter, $matcher);
+                $this->collect($source, $connectors, $upserter, $matcher);
             }
         } finally {
             $lock->release();
@@ -106,16 +104,15 @@ final class FetchFeedJob implements ShouldBeUnique, ShouldQueue
 
     private function collect(
         Source $source,
-        FeedClientInterface $client,
-        FeedParserInterface $parser,
+        ConnectorRegistry $connectors,
         ArticleUpsertService $upserter,
         KeywordMatcher $matcher,
     ): void {
         $startedAt = hrtime(true);
 
         try {
-            $result = $client->fetch($source->feed_url, $source->etag, $source->last_modified);
-            $parsed = $result->notModified ? null : $parser->parse($result->body);
+            $result = $connectors->for($source)->collect($source);
+            $parsed = $result->parsed;
         } catch (FeedFetchException|FeedParseException $e) {
             $this->recordFailure($source, $e, $startedAt);
 
@@ -178,7 +175,7 @@ final class FetchFeedJob implements ShouldBeUnique, ShouldQueue
      */
     private function recordSuccess(
         Source $source,
-        FeedFetchResult $result,
+        ConnectorResult $result,
         ?ParsedFeed $parsed,
         ?ArticleUpsertResult $stats,
         ?array $matchStats,

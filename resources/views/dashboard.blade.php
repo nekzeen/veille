@@ -80,7 +80,7 @@
                             <p class="mt-2 text-xs text-gray-500">
                                 Mots-clés :
                                 @foreach ($veille->keywords as $kw)
-                                    <span class="inline-block bg-indigo-50 text-indigo-700 rounded px-1.5 py-0.5 mr-1">{{ $kw->term }}</span>
+                                    <span class="inline-block bg-chip text-indigo-700 rounded px-1.5 py-0.5 mr-1">{{ $kw->term }}</span>
                                 @endforeach
                             </p>
                             <div class="mt-3 flex items-center gap-4 text-sm">
@@ -123,7 +123,7 @@
                                         <span class="font-medium text-gray-600">{{ $av->article->source->name ?? 'Source inconnue' }}</span>
                                         <span>{{ $av->article->published_at ?? $av->article->created_at }}</span>
                                         <span class="inline-flex items-center bg-gray-100 rounded px-1.5 py-0.5">veille « {{ $av->veille->name }} »</span>
-                                        <span class="inline-flex items-center bg-indigo-50 text-indigo-700 rounded px-1.5 py-0.5">{{ $av->matched_keyword }}</span>
+                                        <span class="inline-flex items-center bg-chip text-indigo-700 rounded px-1.5 py-0.5">{{ $av->matched_keyword }}</span>
                                     </p>
                                 </div>
                             </div>

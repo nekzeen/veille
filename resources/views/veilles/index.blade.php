@@ -18,7 +18,7 @@
                 <div class="p-4 bg-green-100 text-green-800 rounded-md">{{ session('status') }}</div>
             @endif
 
-            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+            <div class="bg-white overflow-hidden shadow sm:rounded-lg border border-slate-300">
                 <div class="p-6 text-gray-900">
                     @if ($veilles->isEmpty())
                         <p class="text-gray-500">Vous n'avez pas encore de veille.</p>

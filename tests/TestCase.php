@@ -22,7 +22,7 @@ abstract class TestCase extends BaseTestCase
         if (! is_string($database) || ! in_array($database, self::ALLOWED_TEST_DATABASES, true)) {
             throw new RuntimeException(
                 "Tests refusés : la connexion par défaut « {$default} » cible « {$database} ». "
-                ."Seules « :memory: » et « veille_test » sont autorisées."
+                .'Seules « :memory: » et « veille_test » sont autorisées.'
             );
         }
 

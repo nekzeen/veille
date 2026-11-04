@@ -20,7 +20,7 @@
                         {{ $article->source->name ?? 'Source inconnue' }}
                         · {{ ($article->published_at ?? $article->collected_at)->format('d/m/Y H:i') }}
                         @if ($article->pivot->matched_keyword !== null)
-                            · <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">{{ $article->pivot->matched_keyword }}</span>
+                            · <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-chip text-indigo-800">{{ $article->pivot->matched_keyword }}</span>
                         @endif
                         @if ($article->author)
                             · par {{ $article->author }}

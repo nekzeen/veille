@@ -14,7 +14,7 @@
     <div class="py-12">
         <div class="max-w-3xl mx-auto sm:px-6 lg:px-8 space-y-6">
 
-            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+            <div class="bg-white overflow-hidden shadow sm:rounded-lg border border-slate-300">
                 <div class="p-6 text-gray-900 space-y-3">
                     <p class="text-sm text-gray-500">
                         {{ $article->source->name ?? 'Source inconnue' }}
@@ -78,7 +78,7 @@
                 </div>
             </div>
 
-            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+            <div class="bg-white overflow-hidden shadow sm:rounded-lg border border-slate-300">
                 <div class="p-6 text-gray-900">
                     <h3 class="text-sm font-medium text-gray-700 mb-2">Ma note</h3>
                     @if ($note !== null)
@@ -110,7 +110,7 @@
                 </div>
             </div>
 
-            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+            <div class="bg-white overflow-hidden shadow sm:rounded-lg border border-slate-300">
                 <div class="p-6 text-gray-900">
                     @if ($body !== '')
                         <div class="article-content space-y-4">{!! $body !!}</div>

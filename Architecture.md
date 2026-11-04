@@ -187,3 +187,82 @@ Memcached présents mais non retenus ; pool FPM `web18` en `ondemand`.
 - Délivrabilité e-mail : enregistrements SPF/DKIM/DMARC du domaine.
 - Politique de sauvegarde réelle (répertoire `backup/` géré par ISPConfig).
 - Version affichée dans le panneau ISPConfig pour le site.
+
+---
+
+## Évolution M8 — collecte multicanale (conception)
+
+### Objectif
+
+Saisie d'une URL → détection automatique du connecteur → aperçu →
+correction manuelle → validation → collecte périodique.
+
+### Ordre de détection
+
+1. **RSS / Atom** — `Content-Type` + racine XML (`<rss>`, `<feed>`).
+2. **JSON Feed** — `application/feed+json` ou JSON `version/items`.
+3. **Métadonnées structurées** — JSON-LD (`ItemList`, `Article`,
+   `NewsArticle`) et Open Graph, seules ou en enrichissement des pages
+   individuelles.
+4. **Extraction HTML** — détection automatique des blocs répétitifs sur
+   la page de découverte.
+5. **Sélecteurs CSS personnalisés** — titre, lien, résumé, date, image,
+   pagination — uniquement si l'automatique est insuffisante.
+
+Le connecteur HTML n'est pas limité aux sélecteurs : il applique les
+stratégies 3 et 4 en priorité. Les métadonnées des pages individuelles
+peuvent compléter les données de la page de résultats (enrichissement
+optionnel, borné).
+
+### Composants
+
+| Composant | Responsabilité |
+|---|---|
+| `SourceDetector` | analyse l'URL → `{connector, confiance, config proposée, échantillon}` |
+| `ConnectorInterface` | `fetch(Source) -> NormalizedArticle[]` — contrat unique |
+| `RssConnector`/`AtomConnector` | adaptation de l'existant SimplePie |
+| `JsonFeedConnector` | `items[]` → NormalizedArticle |
+| `HtmlConnector` | métadonnées + répétition + sélecteurs optionnels |
+| `ApiConnector` | différé M8.7 — trop variable pour MVP |
+| `ArticleNormalizer` | unifie titre/lien/résumé/date/guid → `dedup_key` |
+
+### `submitted_url` vs `fetch_url`
+
+- `submitted_url` : URL saisie par l'utilisateur — **jamais modifiée**
+  (traçabilité, re-détection, affichage).
+- `fetch_url` : URL réellement collectée (flux découvert ou endpoint
+  configuré) — mise à jour par la détection validée.
+
+### Configuration versionnée et états
+
+- `config` JSON : `{version, connector, selectors{}, enrichment,
+  proposed}` — `config_version` incrémenté à chaque changement.
+- États de `config_state` : `detected` → `needs_review` →
+  `validated` — **cycle de vie de la configuration uniquement**.
+- L'état opérationnel reste porté par les champs existants
+  (`is_active`, `fail_count`, `last_error`, `last_fetched_at`,
+  `last_success_at`) : CAPTCHA, blocage et échecs de collecte
+  n'invalident **jamais** automatiquement une configuration
+  `validated` — ils sont affichés comme erreurs de collecte.
+- Une re-détection produit une **proposition** — une configuration
+  `validated` n'est jamais écrasée silencieusement ; bascule uniquement
+  sur validation explicite de l'utilisateur.
+- `submitted_url` est en lecture seule applicative (jamais mise à jour
+  par la détection ni les services).
+
+### Sécurité (renforcement de l'existant)
+
+`SecureFeedClient`/`IpAddressPolicy`/`FeedUrlValidator` réutilisés :
+DNS+IP revalidés à **chaque redirection** (≤ 3), https privilégié,
+`max_bytes`, timeout, profondeur de pagination bornée, rate-limit par
+hôte, `Content-Type` vérifié, `HtmlContentSanitizer` sur le contenu
+extrait, **aucun JavaScript exécuté** — une protection anti-bot
+produit une erreur de collecte (`fail_count`/`last_error`), jamais un
+contournement.
+
+### Cas travail-emploi.gouv.fr
+
+CAPTCHA Cegedim.cloud vérifié sur `/recherche` et
+`spip.php?page=backend` (M8.1) → échec opérationnel signalé via
+`last_error`/`fail_count` sans invalider la configuration ; autres
+flux officiels recherchables ultérieurement.

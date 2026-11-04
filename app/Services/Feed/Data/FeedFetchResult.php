@@ -13,7 +13,9 @@ namespace App\Services\Feed\Data;
  *   pour le GET conditionnel suivant — décision d'orchestration) ;
  * - `notModified` : vrai si la réponse finale est 304 ;
  * - `bytesRead` : octets de corps effectivement lus ;
- * - `redirects` : nombre de redirections suivies (0 à 3).
+ * - `redirects` : nombre de redirections suivies (0 à 3) ;
+ * - `contentType` : en-tête `Content-Type` de la réponse finale (M8.3,
+ *   contrôle du type à la détection ; `null` si absent).
  */
 final class FeedFetchResult
 {
@@ -27,5 +29,6 @@ final class FeedFetchResult
         public readonly bool $notModified,
         public readonly int $bytesRead,
         public readonly int $redirects,
+        public readonly ?string $contentType = null,
     ) {}
 }

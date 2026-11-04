@@ -14,6 +14,8 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $last_fetched_at
  * @property Carbon|null $last_success_at
  * @property int $fail_count
+ * @property array<string, mixed>|null $config
+ * @property array<string, mixed>|null $detection
  */
 class Source extends Model
 {
@@ -31,6 +33,12 @@ class Source extends Model
 
     protected $fillable = [
         'feed_url',
+        'submitted_url',
+        'fetch_url',
+        'connector',
+        'config',
+        'config_state',
+        'detection',
         'name',
         'site_url',
         'description',
@@ -48,6 +56,8 @@ class Source extends Model
             'last_fetched_at' => 'datetime',
             'last_success_at' => 'datetime',
             'fail_count' => 'integer',
+            'config' => 'array',
+            'detection' => 'array',
         ];
     }
 

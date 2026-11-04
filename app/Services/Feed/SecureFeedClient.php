@@ -131,6 +131,7 @@ final class SecureFeedClient implements FeedClientInterface
                 notModified: false,
                 bytesRead: strlen($body),
                 redirects: $redirects,
+                contentType: self::headerValue($response, 'Content-Type'),
             );
         }
     }

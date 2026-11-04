@@ -3,8 +3,10 @@
 use App\Http\Controllers\ArchiveController;
 use App\Http\Controllers\CatalogueController;
 use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FavoriteController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\SourceDetectionController;
 use App\Http\Controllers\UserSourceController;
 use App\Http\Controllers\VeilleArticleController;
 use App\Http\Controllers\VeilleController;
@@ -15,7 +17,7 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-Route::get('/dashboard', [\App\Http\Controllers\DashboardController::class, 'index'])
+Route::get('/dashboard', [DashboardController::class, 'index'])
     ->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::middleware('auth')->group(function () {
@@ -27,6 +29,12 @@ Route::middleware('auth')->group(function () {
     Route::get('/sources', [UserSourceController::class, 'index'])->name('sources.index');
     Route::post('/sources/{source}/subscribe', [UserSourceController::class, 'store'])->name('sources.subscribe');
     Route::post('/sources/personal', [UserSourceController::class, 'storePersonal'])->name('sources.personal');
+    // Détection et prévisualisation d'URL (M8.3) — JSON, sans persistance.
+    Route::middleware('throttle:source-detection')->group(function () {
+        Route::post('/sources/detect', [SourceDetectionController::class, 'detect'])->name('sources.detect');
+        Route::post('/sources/preview', [SourceDetectionController::class, 'preview'])->name('sources.preview');
+        Route::post('/sources/confirm', [UserSourceController::class, 'storeDetected'])->name('sources.confirm');
+    });
     Route::delete('/sources/{userSource}', [UserSourceController::class, 'destroy'])->name('sources.unsubscribe');
 
     Route::get('/veilles', [VeilleController::class, 'index'])->name('veilles.index');

@@ -5,11 +5,142 @@ namespace App\Services;
 use App\Models\Source;
 use App\Models\User;
 use App\Models\UserSource;
+use App\Services\Feed\Detection\DetectionResult;
+use App\Services\Feed\Detection\SourceDetector;
+use App\Services\Feed\Detection\SourceNotCollectableException;
+use App\Services\Feed\Html\HtmlExtractor;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class SourceSubscriptionService
 {
+    public function __construct(private readonly SourceDetector $detector) {}
+
+    /**
+     * Ajout d'une source personnelle via la détection (M8.5) : le
+     * serveur redétecte l'URL soumise — rien de ce qui provient du
+     * navigateur (connecteur, fetch_url, état) n'est fiable ; seule
+     * la configuration HTML éventuelle est filtrée puis appliquée.
+     *
+     * @param  array<string, mixed>|null  $htmlConfig
+     * @return array{0: Source, 1: UserSource, 2: DetectionResult}
+     *
+     * @throws SourceNotCollectableException détection en échec ou
+     *                                       page HTML sans article extractible
+     */
+    public function addDetectedSource(User $user, string $submittedUrl, ?array $htmlConfig = null): array
+    {
+        $submittedUrl = trim($submittedUrl);
+        $config = self::sanitizeHtmlConfig($htmlConfig);
+        $detection = $this->detector->detect($submittedUrl, $config);
+
+        if (! $detection->isSuccessful() || ! $detection->connectorAvailable) {
+            throw new SourceNotCollectableException($detection);
+        }
+
+        $connector = $detection->connector ?? 'rss';
+        $parsed = $detection->parsed;
+        if ($connector === 'html' && ($parsed === null || $parsed->items === [])) {
+            throw new SourceNotCollectableException(
+                DetectionResult::failure('unrecognized', $submittedUrl),
+            );
+        }
+
+        $fetchUrl = self::normalizeFeedUrl($detection->fetchUrl ?? $submittedUrl);
+        $withColumns = Schema::hasColumn('sources', 'connector');
+        // Colonnes M8 absentes (migration de production non appliquée) :
+        // seuls les flux RSS/Atom sont enregistrables — une page HTML ou
+        // un JSON Feed deviendrait sinon une « source RSS » en échec.
+        if (! $withColumns && ! in_array($connector, ['rss', 'atom'], true)) {
+            throw new SourceNotCollectableException(
+                DetectionResult::failure('unsupported_content_type', $submittedUrl),
+            );
+        }
+
+        return DB::transaction(function () use ($user, $submittedUrl, $fetchUrl, $connector, $config, $detection, $withColumns): array {
+            $source = Source::where('feed_url', $fetchUrl)->first()
+                ?? ($withColumns ? Source::where('fetch_url', $fetchUrl)->first() : null);
+
+            if ($source === null) {
+                $attributes = [
+                    'feed_url' => $fetchUrl,
+                    'name' => $detection->parsed?->title
+                        ?: (parse_url($fetchUrl, PHP_URL_HOST) ?: $fetchUrl),
+                    'site_url' => $detection->parsed?->siteUrl,
+                    'is_catalogue' => false,
+                    'created_at' => now('UTC'),
+                    'updated_at' => now('UTC'),
+                ];
+                // Garde temporaire (M8.2.1) : colonnes absentes tant que
+                // la migration n'est pas appliquée en production.
+                if ($withColumns) {
+                    $attributes += [
+                        'submitted_url' => $submittedUrl,
+                        'fetch_url' => $fetchUrl,
+                        'connector' => $connector,
+                        'config' => $connector === 'html' ? $config : null,
+                        'config_state' => 'validated',
+                        'detection' => $detection->toArray(),
+                    ];
+                }
+                try {
+                    $source = Source::create($attributes);
+                } catch (QueryException $e) {
+                    if (! self::isUniqueViolation($e)) {
+                        throw $e;
+                    }
+                    // Le doublon UNIQUE prouve l'existence : la ligne
+                    // concurrente doit se relire, sinon erreur réelle.
+                    $source = Source::where('feed_url', $fetchUrl)->firstOrFail();
+                }
+            }
+
+            // Source existante : jamais d'écrasement de sa configuration.
+            return [$source, $this->firstOrCreateSubscription($user, $source), $detection];
+        });
+    }
+
+    /**
+     * Configuration HTML filtrée : seuls les champs documentés
+     * subsistent, sélecteurs bornés et validés (sous-ensemble CSS),
+     * stratégie ramenée à `auto` sans sélecteur `item`.
+     *
+     * @param  array<string, mixed>|null  $config
+     * @return array<string, mixed>|null
+     */
+    public static function sanitizeHtmlConfig(?array $config): ?array
+    {
+        if ($config === null) {
+            return null;
+        }
+
+        $selectors = [];
+        foreach (['item', 'link', 'title', 'summary', 'date'] as $key) {
+            $value = $config['selectors'][$key] ?? null;
+            if (is_string($value) && trim($value) !== ''
+                && HtmlExtractor::isValidSelector($value)) {
+                $selectors[$key] = mb_substr(trim($value), 0, 300);
+            }
+        }
+
+        $strategy = ($config['strategy'] ?? null) === 'selectors' && isset($selectors['item'])
+            ? 'selectors'
+            : 'auto';
+        $enrichPages = max(0, min(HtmlExtractor::MAX_ENRICH_PAGES, (int) ($config['enrich_pages'] ?? 0)));
+
+        if ($strategy === 'auto' && $selectors === [] && $enrichPages === 0) {
+            return null; // rien à mémoriser : configuration par défaut
+        }
+
+        return [
+            'version' => 1,
+            'strategy' => $strategy,
+            'enrich_pages' => $enrichPages,
+            'selectors' => $selectors,
+        ];
+    }
+
     /**
      * Abonnement de l'utilisateur à une source existante (catalogue ou déjà enregistrée).
      *
@@ -40,13 +171,24 @@ class SourceSubscriptionService
 
             if ($source === null) {
                 try {
-                    $source = Source::create([
+                    $attributes = [
                         'feed_url' => $normalized,
                         'name' => parse_url($normalized, PHP_URL_HOST) ?: $normalized,
                         'is_catalogue' => false,
                         'created_at' => now('UTC'),
                         'updated_at' => now('UTC'),
-                    ]);
+                    ];
+                    // Garde temporaire : colonnes M8 absentes tant que la
+                    // migration n'est pas appliqu�e en production.
+                    if (Schema::hasColumn('sources', 'connector')) {
+                        $attributes += [
+                            'submitted_url' => $normalized,
+                            'fetch_url' => $normalized,
+                            'connector' => 'rss',
+                            'config_state' => 'validated',
+                        ];
+                    }
+                    $source = Source::create($attributes);
                 } catch (QueryException $e) {
                     // Seule une violation UNIQUE (23000/1062) est un doublon
                     // concurrent : relire l'existant. Toute autre erreur SQL

@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\DetectedSourceRequest;
 use App\Http\Requests\StorePersonalSourceRequest;
 use App\Models\Source;
 use App\Models\UserSource;
+use App\Services\Feed\Detection\SourceNotCollectableException;
 use App\Services\SourceSubscriptionService;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -46,6 +49,45 @@ class UserSourceController extends Controller
             $request->user(),
             (string) $request->validated('feed_url'),
         );
+
+        return redirect()->route('sources.index')
+            ->with('status', "Source « {$source->name} » ajoutée.");
+    }
+
+    /**
+     * Ajout d'une source personnelle après détection (M8.5) : le
+     * serveur redétecte l'URL — seule la configuration HTML filtrée du
+     * navigateur est transmise. Réponse JSON pour le parcours Alpine,
+     * redirection sinon.
+     */
+    public function storeDetected(DetectedSourceRequest $request): JsonResponse|RedirectResponse
+    {
+        try {
+            [$source, , $detection] = $this->service->addDetectedSource(
+                $request->user(),
+                (string) $request->validated('url'),
+                $request->htmlConfig(),
+            );
+        } catch (SourceNotCollectableException $e) {
+            $message = $e->getMessage();
+            if ($request->expectsJson()) {
+                return response()->json(['status' => 'error', 'message' => $message], 422);
+            }
+
+            return back()->withInput()->withErrors(['url' => $message]);
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'status' => 'ok',
+                'source' => [
+                    'id' => $source->id,
+                    'name' => $source->name,
+                    'fetch_url' => $detection->fetchUrl,
+                    'connector' => $detection->connector,
+                ],
+            ]);
+        }
 
         return redirect()->route('sources.index')
             ->with('status', "Source « {$source->name} » ajoutée.");

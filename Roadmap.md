@@ -116,6 +116,22 @@ articles correspondants.
 - Livraison au moins une fois (doublon résiduel accepté en cas de
   crash entre envoi et clôture).
 
+## M8 — Collecte multicanale (conception validée M8.1)
+
+| Étape | Périmètre | Criticité |
+|---|---|---|
+| M8.2 | Connecteurs + normalisation + compat. RSS | indispensable |
+| M8.3 | `SourceDetector` + prévisualisation backend | indispensable |
+| M8.4 | Extraction HTML + formats structurés | indispensable |
+| M8.5 | Interface ajout / aperçu / correction | indispensable |
+| M8.6 | Sécurité, robustesse, tests | indispensable |
+| M8.7 | `ApiConnector` | différable |
+
+Décisions : `submitted_url`/`fetch_url`, `config` JSON versionnée,
+`config_state` = configuration seule (`detected`/`needs_review`/
+`validated`) — erreurs de collecte dans `fail_count`/`last_error`,
+anti-bot = échec opérationnel (pas de contournement), aucun JS exécuté.
+
 ## Post-MVP (ordre indicatif)
 
 | Évolution | Valeur |

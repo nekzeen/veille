@@ -6,6 +6,7 @@ use App\Jobs\FetchFeedJob;
 use App\Models\Article;
 use App\Models\Source;
 use App\Services\Feed\ArticleUpsertService;
+use App\Services\Feed\Connectors\ConnectorRegistry;
 use App\Services\Feed\Exceptions\FeedDnsException;
 use App\Services\Feed\Exceptions\FeedHttpException;
 use App\Services\Feed\Exceptions\FeedNetworkException;
@@ -66,7 +67,9 @@ class FetchFeedJobTest extends TestCase
         ?FeedParserInterface $parser = null,
     ): void {
         $id = $source instanceof Source ? $source->id : $source;
-        (new FetchFeedJob($id))->handle($client, $parser ?? new SpyFeedParser, app(ArticleUpsertService::class), app(KeywordMatcher::class));
+        app()->instance(FeedClientInterface::class, $client);
+        app()->instance(FeedParserInterface::class, $parser ?? new SpyFeedParser);
+        (new FetchFeedJob($id))->handle(app(ConnectorRegistry::class), app(ArticleUpsertService::class), app(KeywordMatcher::class));
     }
 
     private function assertUntouched(Source $source): void

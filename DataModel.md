@@ -769,3 +769,40 @@ modification de `veille_db`, aucun commit, aucun push.
   MariaDB `+00:00`** (absence de conversions implicites des `TIMESTAMP`).
 - Cette section n'autorise aucune migration : démarrage uniquement sur
   validation explicite de Gaël.
+
+---
+
+## 12. Évolution M8 — sources multicanales (conception, non migrée)
+
+### Colonnes `sources` envisagées
+
+| Colonne | Type | Rôle |
+|---|---|---|
+| `submitted_url` | `varchar` | URL saisie par l'utilisateur — jamais modifiée (traçabilité) |
+| `fetch_url` | `varchar` | URL effectivement collectée (flux découvert ou endpoint) |
+| `connector` | `varchar(16)` | `rss` (défaut) / `atom` / `json_feed` / `html` / `api` |
+| `config` | `json` | `{version, selectors{}, enrichment, proposed}` — versionnée |
+| `config_state` | `varchar(12)` | `detected`/`needs_review`/`validated` — configuration seulement |
+| `detection` | `json` | résultat brut + confiance de la dernière détection |
+
+### Stratégie de migration
+
+Additive : `connector='rss'` + `config_state='validated'` en backfill,
+`feed_url` recopié dans `submitted_url`/`fetch_url` — **compatibilité
+totale des 7 sources existantes**, aucune donnée RSS perdue.
+**Rollback (`down()`) : suppression des six colonnes** — les données
+RSS historiques sont conservées, mais **toute configuration
+enregistrée dans les nouvelles colonnes** (`config`, `detection`,
+URL distinctes, états de validation) **est perdue définitivement**.
+Ce rollback n'est donc pas « sans perte » dès que M8.5 aura produit
+des configurations.
+
+### Cohérence
+
+`config_state` = cycle de vie de la **configuration** (`detected`/
+`needs_review`/`validated` — jamais d'état opérationnel) ;
+`is_active`/`fail_count`/`last_error`/`last_fetched_at` = santé de la
+**collecte** — indépendants. Une source `validated` qui devient
+inaccessible garde sa configuration ; l'échec s'exprime dans
+`last_error`/`fail_count`. `submitted_url` en lecture seule
+applicative. Aucune table nouvelle.

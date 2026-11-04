@@ -5,7 +5,7 @@
 
     <div class="py-12">
         <div class="max-w-3xl mx-auto sm:px-6 lg:px-8 space-y-6">
-            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+            <div class="bg-white overflow-hidden shadow sm:rounded-lg border border-slate-300">
                 <div class="p-6 text-gray-900">
                     <form method="POST" action="{{ route('categories.store') }}" class="flex gap-2">
                         @csrf
@@ -23,7 +23,7 @@
                 </div>
             </div>
 
-            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+            <div class="bg-white overflow-hidden shadow sm:rounded-lg border border-slate-300">
                 <div class="p-6 text-gray-900">
                     @if ($categories->isEmpty())
                         <p class="text-gray-500">Vous n'avez pas encore de catégorie.</p>

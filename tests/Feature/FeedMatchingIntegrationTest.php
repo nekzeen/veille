@@ -11,6 +11,9 @@ use App\Models\UserSource;
 use App\Models\Veille;
 use App\Models\VeilleKeyword;
 use App\Services\Feed\ArticleUpsertService;
+use App\Services\Feed\Connectors\ConnectorRegistry;
+use App\Services\Feed\FeedClientInterface;
+use App\Services\Feed\FeedParserInterface;
 use App\Services\KeywordMatcher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
@@ -46,9 +49,10 @@ class FeedMatchingIntegrationTest extends TestCase
 
     private function runJob(Source $source): void
     {
+        app()->instance(FeedClientInterface::class, FakeFeedClient::ok(self::fixture('rss20_basic.xml')));
+        app()->instance(FeedParserInterface::class, new SpyFeedParser);
         (new FetchFeedJob($source->id))->handle(
-            FakeFeedClient::ok(self::fixture('rss20_basic.xml')),
-            new SpyFeedParser,
+            app(ConnectorRegistry::class),
             app(ArticleUpsertService::class),
             app(KeywordMatcher::class),
         );

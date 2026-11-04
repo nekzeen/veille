@@ -574,6 +574,16 @@ production**, sous réserve des validations de Gaël :
 
 ## Livraisons M7 (post-déploiement)
 
+- **M8.1 bis → M8.6 livrées (non commitées)** : socle connecteurs +
+  migration additive (6 colonnes `sources`, pending — jamais en prod),
+  connecteurs RSS/JSON Feed/HTML + extracteur, détecteur +
+  prévisualisation backend (`/sources/detect|preview|confirm`),
+  parcours UI « Ajouter une source » (Alpine), harmonisation graphique
+  (nav blanche, bandeau bleu pâle, fond #E3E7ED, cartes bordées,
+  chips #F1F3F8), audit sécurité (2 correctifs). Suites : SQLite 758 /
+  MariaDB 766. Plan de déploiement : `M8_Deployment_Plan.md` (M8.7.1).
+  Garde `Schema::hasColumn` active jusqu'à la migration de production.
+
 - **Dashboard** : remplacé par un véritable tableau de bord
   (`DashboardController` + vue refaite) — indicateurs, cartes veilles,
   derniers articles, état des collectes, isolation `user_id` partout.

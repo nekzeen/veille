@@ -14,6 +14,8 @@ enum FeedFormat: string
     case Rss = 'rss';
     case Rdf = 'rdf';
     case Atom = 'atom';
+    case JsonFeed = 'json_feed';
+    case Html = 'html';
     case Unknown = 'unknown';
 
     public static function fromSimplePieType(int $type): self

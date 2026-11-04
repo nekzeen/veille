@@ -14,6 +14,13 @@ export default {
             fontFamily: {
                 sans: ['Figtree', ...defaultTheme.fontFamily.sans],
             },
+            colors: {
+                // Harmonisation M8.5 : fond de page, bandeaux, accent.
+                pagebg: '#E3E7ED',
+                surface: '#DCEBFA',
+                accent: '#4F46E5',
+                chip: '#F1F3F8',
+            },
         },
     },
 
