@@ -165,7 +165,7 @@ final class KeywordMatcher
      * translittérés non couverts), les entrées non UTF-8 valides sont
      * conservées telles quelles après repli de casse.
      */
-    private static function normalize(?string $text): string
+    public static function normalize(?string $text): string
     {
         if ($text === null) {
             return '';

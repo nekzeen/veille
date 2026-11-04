@@ -5,6 +5,7 @@ namespace App\Services\Articles;
 use App\Models\Article;
 use App\Models\ArticleUser;
 use App\Models\User;
+use App\Services\Exclusions\ArticleVisibility;
 use Illuminate\Pagination\LengthAwarePaginator;
 
 /**
@@ -72,6 +73,7 @@ final class ArticleArchiveState
                 ->on('article_user.article_id', '=', 'articles.id')
                 ->where('article_user.user_id', $user->id)
                 ->where('article_user.is_archived', true))
+            ->where(fn ($q) => ArticleVisibility::apply($q, $user->id, 'articles.id'))
             ->with('source')
             ->select('articles.*')
             ->orderByRaw('COALESCE(articles.published_at, articles.collected_at) DESC')

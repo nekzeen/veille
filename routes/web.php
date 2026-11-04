@@ -7,6 +7,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FavoriteController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SourceDetectionController;
+use App\Http\Controllers\UserExclusionController;
 use App\Http\Controllers\UserSourceController;
 use App\Http\Controllers\VeilleArticleController;
 use App\Http\Controllers\VeilleController;
@@ -44,6 +45,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/veilles/{veille}/edit', [VeilleController::class, 'edit'])->name('veilles.edit');
     Route::put('/veilles/{veille}', [VeilleController::class, 'update'])->name('veilles.update');
     Route::patch('/veilles/{veille}/toggle', [VeilleController::class, 'toggle'])->name('veilles.toggle');
+    Route::get('/exclusions', [UserExclusionController::class, 'index'])->name('exclusions.index');
+    Route::post('/exclusions', [UserExclusionController::class, 'store'])->name('exclusions.store');
+    Route::put('/exclusions/{exclusion}', [UserExclusionController::class, 'update'])->name('exclusions.update');
+    Route::patch('/exclusions/{exclusion}/toggle', [UserExclusionController::class, 'toggle'])->name('exclusions.toggle');
+    Route::delete('/exclusions/{exclusion}', [UserExclusionController::class, 'destroy'])->name('exclusions.destroy');
     Route::delete('/veilles/{veille}', [VeilleController::class, 'destroy'])->name('veilles.destroy');
 
     // Lecture des articles (M1.12) — CSP renforcée sur les deux routes.

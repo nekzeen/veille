@@ -5,6 +5,7 @@ namespace App\Services\Articles;
 use App\Models\Article;
 use App\Models\Source;
 use App\Models\Veille;
+use App\Services\Exclusions\ArticleVisibility;
 use App\Services\VeilleRematcher;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -47,6 +48,7 @@ final class VeilleArticleQuery
                 ->whereColumn('article_user.article_id', 'articles.id')
                 ->where('article_user.user_id', $veille->user_id)
                 ->where('article_user.is_archived', true))
+            ->where(fn ($q) => ArticleVisibility::apply($q, $veille->user_id, 'articles.id'))
             ->whereRaw(self::EFFECTIVE_DATE.' >= ?', [$cutoff]);
     }
 

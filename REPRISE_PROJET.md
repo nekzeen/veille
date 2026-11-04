@@ -612,3 +612,12 @@ production**, sous réserve des validations de Gaël :
   dans l'environnement) — vérification manuelle requise au déploiement
   (voir §9 : liste, filtres, pagination, lecture, prev/next, Alpine.js
   sous CSP).
+
+- **M9.1 → M9.5 livrées (non commitées)** : exclusions personnelles —
+  tables `user_exclusions` + `article_user_hidden`, CRUD « Mes
+  exclusions » (routes publiées via route:cache), `ExclusionMatcher`,
+  filtrage `ArticleVisibility` sur toutes les lectures + digest,
+  `ApplyExclusionJob` rétroactif avec verrou, réactivation reconciliée.
+  **Migrations production en attente** : `user_exclusions` et
+  `article_user_hidden` (GET /exclusions 500 tant que non appliquées —
+  même situation que M8.2 avant son déploiement).

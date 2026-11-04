@@ -266,3 +266,16 @@ CAPTCHA Cegedim.cloud vérifié sur `/recherche` et
 `spip.php?page=backend` (M8.1) → échec opérationnel signalé via
 `last_error`/`fail_count` sans invalider la configuration ; autres
 flux officiels recherchables ultérieurement.
+
+## M9 — Exclusions personnelles
+
+- Système par utilisateur, commun à toutes ses veilles ; articles
+  communs jamais supprimés ni filtrés pour autrui.
+- Tables `user_exclusions` + `article_user_hidden` (cf. DataModel §13).
+- `ExclusionMatcher` = point unique de correspondance (collecte et
+  rétroactif identiques) ; `ArticleVisibility` = filtre NOT EXISTS
+  indexé sur les lectures (veilles, dashboard, favoris, archives,
+  catégories, digest).
+- `ApplyExclusionJob` : création/modification/réactivation d'une
+  règle ; verrou Cache::lock (database), idempotent, NULL manuel
+  préservé.

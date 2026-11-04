@@ -6,6 +6,7 @@ use App\Models\Article;
 use App\Models\ArticleUser;
 use App\Models\Category;
 use App\Models\User;
+use App\Services\Exclusions\ArticleVisibility;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -41,7 +42,8 @@ final class ArticleCategoryState
     {
         return Category::where('user_id', $user->id)
             ->withCount(['articleUsers as articles_count' => fn ($q) => $q
-                ->where('is_archived', false)])
+                ->where('is_archived', false)
+                ->where(fn ($w) => ArticleVisibility::apply($w, $user->id, 'article_user.article_id'))])
             ->orderBy('name')
             ->get();
     }
@@ -173,6 +175,7 @@ final class ArticleCategoryState
                 ->where('article_user.user_id', $user->id)
                 ->where('article_user.category_id', $category->id)
                 ->where('article_user.is_archived', false))
+            ->where(fn ($q) => ArticleVisibility::apply($q, $user->id, 'articles.id'))
             ->with('source')
             ->select('articles.*')
             ->orderByRaw('COALESCE(articles.published_at, articles.collected_at) DESC')

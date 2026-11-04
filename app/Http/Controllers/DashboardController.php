@@ -8,6 +8,7 @@ use App\Models\ArticleUser;
 use App\Models\ArticleVeille;
 use App\Models\Source;
 use App\Models\Veille;
+use App\Services\Exclusions\ArticleVisibility;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
@@ -24,8 +25,7 @@ final class DashboardController extends Controller
         $uid = (int) $user->id;
 
         $veilles = $user->veilles()
-            ->with('keywords')
-            ->withCount('articleVeilles')
+            ->withCount(['articleVeilles as article_veilles_count' => fn ($q) => ArticleVisibility::apply($q, $uid, 'article_veille.article_id')])
             ->orderBy('name')
             ->get();
 
@@ -36,6 +36,7 @@ final class DashboardController extends Controller
                     ->where('article_user.user_id', '=', $uid);
             })
             ->where('article_veille.user_id', $uid)
+            ->where(fn ($q) => ArticleVisibility::apply($q, $uid, 'article_veille.article_id'))
             ->where(fn ($q) => $q->whereNull('article_user.is_read')->orWhere('article_user.is_read', false))
             ->groupBy('article_veille.veille_id')
             ->pluck(DB::raw('COUNT(*)'), 'article_veille.veille_id');
@@ -51,6 +52,7 @@ final class DashboardController extends Controller
         // Derniers articles détectés, toutes veilles confondues.
         $recents = ArticleVeille::query()
             ->where('article_veille.user_id', $uid)
+            ->where(fn ($q) => ArticleVisibility::apply($q, $uid, 'article_veille.article_id'))
             ->with(['article.source:id,name,site_url', 'veille:id,name'])
             ->orderByDesc('article_veille.id')
             ->limit(10)

@@ -59,4 +59,10 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return $this->hasMany(Veille::class);
     }
+
+    /** @return HasMany<UserExclusion, $this> */
+    public function exclusions(): HasMany
+    {
+        return $this->hasMany(UserExclusion::class);
+    }
 }

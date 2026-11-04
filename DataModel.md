@@ -806,3 +806,23 @@ des configurations.
 inaccessible garde sa configuration ; l'échec s'exprime dans
 `last_error`/`fail_count`. `submitted_url` en lecture seule
 applicative. Aucune table nouvelle.
+
+## 13. Exclusions personnelles (M9)
+
+- `user_exclusions` : `id`, `user_id` FK cascade, `kind` ('url'|'keyword'),
+  `pattern` varchar(500), `is_active`, timestamps — UNIQUE(user_id, kind,
+  pattern). Sous-type URL déduit du motif (domaine, *.sous-domaine, URL
+  exacte, chemin).
+- `article_user_hidden` : `id`, `user_id`, `article_id`, `exclusion_id`
+  NULLABLE (NULL = masquage manuel futur), `created_at` — UNIQUE
+  (user_id, article_id, exclusion_id) + INDEX(exclusion_id) ; cascade
+  sur les 3 FKs. Une ligne = une justification ; article masqué tant
+  qu'une justification vers une règle active subsiste.
+- `ExclusionMatcher::justifications(user_id, url, haystack)` → ids ;
+  URL résolue (ArticleLinkResolver) puis canonisée
+  (ArticleUrlNormalizer) ; texte via KeywordMatcher::normalize.
+- Écriture : `ArticleVeilleWriter::record` insère les justifications
+  (insertOrIgnore, transaction partagée). Lecture : `ArticleVisibility`
+  `NOT EXISTS` joint à `ue.is_active`. Rétroactif : `ApplyExclusionJob`
+  (Cache::lock, lots de 500, insert avant delete). Réactivation :
+  dispatch du job ; désactivation : rien. `SendVeilleDigestJob` filtré.

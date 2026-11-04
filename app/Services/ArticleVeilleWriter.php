@@ -2,8 +2,10 @@
 
 namespace App\Services;
 
+use App\Models\Article;
 use App\Models\ArticleVeille;
 use App\Models\Veille;
+use App\Services\Exclusions\ExclusionMatcher;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
@@ -23,10 +25,49 @@ use Illuminate\Support\Facades\DB;
  */
 final class ArticleVeilleWriter
 {
+    public function __construct(private readonly ExclusionMatcher $exclusions) {}
+
     /**
      * Verrouille la ligne de la veille (SELECT ... FOR UPDATE). Doit
      * précéder toute écriture sur ses correspondances.
      */
+    /**
+     * Justifications de masquage (M9 §9.3) : toutes les règles actives
+     * de l'utilisateur correspondant à l'article → une ligne chacune
+     * dans `article_user_hidden`, idempotent (`insertOrIgnore`), dans
+     * la même transaction que l'insertion `article_veille`.
+     */
+    private function recordExclusions(Veille $veille, int $articleId): void
+    {
+        $article = Article::query()
+            ->find($articleId, ['id', 'url', 'title', 'summary', 'content']);
+        if ($article === null) {
+            return;
+        }
+
+        $haystack = implode(' ', array_filter([
+            $article->title, $article->summary, $article->content,
+        ]));
+
+        $exclusionIds = $this->exclusions->justifications(
+            $veille->user_id, $article->url, $haystack,
+        );
+        if ($exclusionIds === []) {
+            return;
+        }
+
+        $now = now('UTC');
+        DB::table('article_user_hidden')->insertOrIgnore(array_map(
+            fn (int $exclusionId): array => [
+                'user_id' => $veille->user_id,
+                'article_id' => $articleId,
+                'exclusion_id' => $exclusionId,
+                'created_at' => $now,
+            ],
+            $exclusionIds,
+        ));
+    }
+
     private function lockVeille(int $veilleId): void
     {
         Veille::whereKey($veilleId)->lockForUpdate()->value('id');
@@ -49,6 +90,8 @@ final class ArticleVeilleWriter
                     'user_id' => $veille->user_id,
                     'matched_keyword' => $matchedKeyword,
                 ]);
+
+                $this->recordExclusions($veille, $articleId);
 
                 return true;
             } catch (QueryException $e) {

@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Mail\VeilleDigestMail;
 use App\Models\ArticleVeille;
 use App\Models\VeilleAlert;
+use App\Services\Exclusions\ArticleVisibility;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Database\Query\Builder;
@@ -118,6 +119,7 @@ class SendVeilleDigestJob implements ShouldQueue
         return ArticleVeille::where('veille_id', $alert->veille_id)
             ->where('id', '>', $alert->start_match_id)
             ->where('id', '<=', $alert->end_match_id)
+            ->where(fn ($q) => ArticleVisibility::apply($q, $alert->user_id, 'article_veille.article_id'))
             ->with('article.source')
             ->orderBy('id')
             ->limit(50)

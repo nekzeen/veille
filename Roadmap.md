@@ -172,3 +172,4 @@ M1 (socle) → M2 (sources) → M3 (veilles) → M4 (lecture) → M5 (alertes)
 ```
 
 Le partage et l'API ne peuvent être envisagés qu'après M4.
+- M9.1–M9.5 : exclusions personnelles (CRUD + matcher + pipeline + rétroactif + docs) livrées — voir M9_Conception_Exclusions.md et DataModel §13.
