@@ -120,6 +120,7 @@ articles correspondants.
 
 | Évolution | Valeur |
 |---|---|
+| ~~Tableau de bord~~ | ✅ Livré (M7.14/M7.15) — indicateurs, veilles, derniers articles, état collectes |
 | Import/export OPML | Migration depuis Inoreader/Netvibes |
 | Partage d'articles et collections | Collaboration facultative |
 | Recherche plein texte (`FULLTEXT` MariaDB) | Retrouvaille dans l'historique |

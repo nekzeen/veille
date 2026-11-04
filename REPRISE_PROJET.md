@@ -572,6 +572,17 @@ production**, sous réserve des validations de Gaël :
   d'autres sites, pas de paquet système, pas de daemon persistant, pas
   d'écriture dans `/web` hors procédure validée.
 
+## Livraisons M7 (post-déploiement)
+
+- **Dashboard** : remplacé par un véritable tableau de bord
+  (`DashboardController` + vue refaite) — indicateurs, cartes veilles,
+  derniers articles, état des collectes, isolation `user_id` partout.
+- **Navigation** : le nom d'une veille pointe désormais vers
+  `/veilles/{id}/articles`.
+- **Environnement PHPUnit sécurisé** : `APP_CONFIG_CACHE` dédié +
+  garde-fou anti-`veille_db` dans `TestCase` ; suite **SQLite** OK et
+  **MariaDB 700 tests / 2041 assertions** sur `veille_test` uniquement.
+
 ## Écarts connus entre documents et état réel
 
 - `.env` `APP_TIMEZONE=Europe/Paris` : **inerte** — `config/app.php`

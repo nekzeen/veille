@@ -40,6 +40,17 @@ php artisan config:cache route:cache view:cache
 Vérifier avant de finir une mission : `pint --test`, `phpstan`,
 `php artisan test` — les trois doivent passer.
 
+### Tests en production (M7.17)
+
+- `APP_CONFIG_CACHE` pointe vers `bootstrap/cache/config-testing.php`
+  dans `phpunit.xml` et `phpunit.mariadb.xml` → PHPUnit ne lit jamais
+  le cache de config de production.
+- Garde-fou dans `tests/TestCase.php::createApplication()` : les tests
+  refusent de démarrer si la base cible n'est pas `:memory:` ou
+  `veille_test` (jamais `veille_db`). Ne pas désactiver ce garde-fou.
+- Après toute modification de `routes/*.php` en production :
+  `php artisan route:cache` — le cache fige les anciennes closures.
+
 ## Workflow Git
 
 - Un **commit indépendant par étape cohérente et validée** ; ne pas
