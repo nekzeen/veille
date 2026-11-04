@@ -69,7 +69,7 @@
                 <div class="grid md:grid-cols-2 gap-4">
                     @forelse ($veilles as $veille)
                         <a href="{{ route('veilles.articles.index', $veille) }}"
-                           class="block bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:border-indigo-300 hover:shadow transition group">
+                           class="flex flex-col bg-white rounded-xl shadow border border-slate-300 p-5 hover:border-indigo-300 transition group">
                             <div class="flex items-start justify-between gap-3">
                                 <h4 class="font-semibold text-gray-900 group-hover:text-indigo-700">{{ $veille->name }}</h4>
                                 <span class="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
@@ -77,14 +77,11 @@
                                     {{ $veille->is_active ? 'Active' : 'Inactive' }}
                                 </span>
                             </div>
-                            <p class="mt-2 text-xs text-gray-500">
-                                Mots-clés :
-                                @foreach ($veille->keywords as $kw)
-                                    <span class="inline-block bg-chip text-indigo-700 rounded px-1.5 py-0.5 mr-1">{{ $kw->term }}</span>
-                                @endforeach
+                            <p class="mt-2 text-sm text-gray-600 leading-relaxed line-clamp-2">
+                                {{ $veille->description ?: 'Aucune description renseignée' }}
                             </p>
-                            <div class="mt-3 flex items-center gap-4 text-sm">
-                                <span class="text-gray-600">{{ $veille->article_veilles_count }} article(s)</span>
+                            <div class="mt-auto pt-4 flex items-center gap-4 text-xs border-t border-gray-100">
+                                <span class="text-gray-500">{{ $veille->article_veilles_count }} article(s)</span>
                                 <span class="{{ $veille->unread_count > 0 ? 'text-indigo-600 font-semibold' : 'text-gray-400' }}">
                                     {{ $veille->unread_count }} non lu(s)
                                 </span>
