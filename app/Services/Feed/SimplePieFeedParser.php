@@ -89,7 +89,7 @@ final class SimplePieFeedParser implements FeedParserInterface
         return new FeedItemData(
             guid: $guid,
             guidIsPermalink: $this->guidIsPermalink($item, $guid),
-            url: $url,
+            url: ArticleLinkResolver::resolve($url),
             title: $title,
             author: self::blank($item->get_author()?->get_name()),
             summary: self::blank($item->get_description()),

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Feed\Html;
 
 use App\Enums\FeedFormat;
+use App\Services\Feed\ArticleLinkResolver;
 use App\Services\Feed\Data\FeedItemData;
 use App\Services\Feed\Data\ParsedFeed;
 use App\Services\Feed\IpAddressPolicy;
@@ -637,7 +638,7 @@ final class HtmlExtractor
         return new FeedItemData(
             guid: $guid,
             guidIsPermalink: $guid !== null,
-            url: $url,
+            url: ArticleLinkResolver::resolve($url),
             title: $title,
             author: $author,
             summary: $summary,

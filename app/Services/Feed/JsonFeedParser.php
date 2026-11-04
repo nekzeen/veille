@@ -88,7 +88,7 @@ final class JsonFeedParser
         return new FeedItemData(
             guid: $id,
             guidIsPermalink: $id !== null,
-            url: self::url($raw['url'] ?? $raw['external_url'] ?? null),
+            url: ArticleLinkResolver::resolve(self::url($raw['url'] ?? $raw['external_url'] ?? null)),
             title: self::str($raw['title'] ?? null),
             author: $author,
             summary: $summary,
