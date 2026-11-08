@@ -32,7 +32,7 @@ class SourceSubscriptionService
      * @throws SourceNotCollectableException détection en échec ou
      *                                       page HTML sans article extractible
      */
-    public function addDetectedSource(User $user, string $submittedUrl, ?array $htmlConfig = null): array
+    public function addDetectedSource(User $user, string $submittedUrl, ?array $htmlConfig = null, ?int $themeId = null): array
     {
         $submittedUrl = trim($submittedUrl);
         $config = self::sanitizeHtmlConfig($htmlConfig);
@@ -61,17 +61,22 @@ class SourceSubscriptionService
             );
         }
 
-        return DB::transaction(function () use ($user, $submittedUrl, $fetchUrl, $connector, $config, $detection, $withColumns): array {
+        return DB::transaction(function () use ($user, $submittedUrl, $fetchUrl, $connector, $config, $detection, $withColumns, $themeId): array {
             $source = Source::where('feed_url', $fetchUrl)->first()
                 ?? ($withColumns ? Source::where('fetch_url', $fetchUrl)->first() : null);
 
             if ($source === null) {
+                // M13.2b — toute NOUVELLE source validée est publiée au
+                // catalogue commun avec sa thématique ; une source
+                // existante n'est ni re-publiée ni re-thématisée (les
+                // historiques privés restent privés).
                 $attributes = [
                     'feed_url' => $fetchUrl,
                     'name' => $detection->parsed?->title
                         ?: (parse_url($fetchUrl, PHP_URL_HOST) ?: $fetchUrl),
                     'site_url' => $detection->parsed?->siteUrl,
-                    'is_catalogue' => false,
+                    'theme_id' => $themeId,
+                    'is_catalogue' => true,
                     'created_at' => now('UTC'),
                     'updated_at' => now('UTC'),
                 ];

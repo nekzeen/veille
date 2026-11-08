@@ -6,6 +6,7 @@ use App\Http\Requests\DetectedSourceRequest;
 use App\Http\Requests\StorePersonalSourceRequest;
 use App\Jobs\FetchFeedJob;
 use App\Models\Source;
+use App\Models\SourceTheme;
 use App\Models\UserSource;
 use App\Services\Feed\Detection\SourceNotCollectableException;
 use App\Services\SourceSubscriptionService;
@@ -32,7 +33,9 @@ class UserSourceController extends Controller
             ->orderByDesc('created_at')
             ->get();
 
-        return view('sources.index', compact('subscriptions', 'showErrors'));
+        $themes = SourceTheme::orderBy('id')->get();
+
+        return view('sources.index', compact('subscriptions', 'showErrors', 'themes'));
     }
 
     /** Abonnement à une source existante (catalogue ou déjà enregistrée). */
@@ -67,11 +70,15 @@ class UserSourceController extends Controller
      */
     public function storeDetected(DetectedSourceRequest $request): JsonResponse|RedirectResponse
     {
+        // M13.2b — thématique obligatoire UNIQUEMENT à l'enregistrement.
+        $request->validate(['theme_id' => 'required|integer|exists:source_themes,id']);
+
         try {
             [$source, , $detection] = $this->service->addDetectedSource(
                 $request->user(),
                 (string) $request->validated('url'),
                 $request->htmlConfig(),
+                $request->themeId(),
             );
         } catch (SourceNotCollectableException $e) {
             $message = $e->getMessage();

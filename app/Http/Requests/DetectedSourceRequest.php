@@ -33,6 +33,10 @@ class DetectedSourceRequest extends FormRequest
             'url' => ['required', 'string', 'max:1024', 'url:http,https'],
             'strategy' => ['nullable', 'string', 'in:auto,selectors'],
             'enrich_pages' => ['nullable', 'integer', 'min:0', 'max:3'],
+            // M13.2b — thématique : validée ici quand elle est fournie ;
+            // l'obligation est contrôlée côté confirmation (storeDetected),
+            // pas à la détection/prévisualisation.
+            'theme_id' => ['nullable', 'integer', 'exists:source_themes,id'],
         ];
         foreach (self::SELECTOR_KEYS as $key) {
             $rules["selectors.{$key}"] = ['nullable', 'string', 'max:300', $selectorRule];
@@ -49,6 +53,14 @@ class DetectedSourceRequest extends FormRequest
      *
      * @return array<string, mixed>|null
      */
+    /** Thématique demandée pour la publication au catalogue (M13.2b). */
+    public function themeId(): ?int
+    {
+        $v = $this->validated('theme_id');
+
+        return $v === null ? null : (int) $v;
+    }
+
     public function htmlConfig(): ?array
     {
         $selectors = [];

@@ -106,8 +106,19 @@
                                     </x-secondary-button>
                                 </details>
 
+                                <label class="block mb-3" x-show="savable()">
+                                    <span class="text-sm font-medium text-gray-700">Thématique du catalogue</span>
+                                    <select x-model="theme_id" x-bind:disabled="busy"
+                                        class="mt-1 block w-full sm:w-72 border-gray-300 rounded-md shadow-sm text-sm">
+                                        <option value="">Choisir une thématique…</option>
+                                        @foreach ($themes as $theme)
+                                            <option value="{{ $theme->id }}">{{ $theme->name }}</option>
+                                        @endforeach
+                                    </select>
+                                    <span class="mt-1 block text-xs text-gray-500">La source validée sera publiée dans le catalogue commun.</span>
+                                </label>
                                 <div class="flex flex-wrap items-center gap-3">
-                                    <x-primary-button type="button" x-show="savable()"
+                                    <x-primary-button type="button" x-show="savable() && theme_id !== ''"
                                         x-on:click="confirm()" x-bind:disabled="busy">
                                         <span x-show="! saving">Ajouter cette source</span>
                                         <span x-show="saving" x-cloak>Ajout…</span>
@@ -221,6 +232,7 @@
                 saved: '',
                 selectors: { item: '', link: '', title: '', summary: '', date: '' },
                 enrichPages: 0,
+                theme_id: '',
 
                 get busy() { return this.loading || this.saving; },
 
@@ -234,6 +246,7 @@
                         strategy: s.item ? 'selectors' : 'auto',
                         enrich_pages: parseInt(this.enrichPages || 0, 10),
                         selectors: s,
+                        theme_id: this.theme_id ? parseInt(this.theme_id, 10) : null,
                     };
                 },
 
