@@ -46,7 +46,12 @@ final class FetchFeedJob implements ShouldBeUnique, ShouldQueue
 
     public int $uniqueFor = 900;
 
-    public function __construct(public int $sourceId) {}
+    /**
+     * @param  bool  $force  M12.18 — tentative ponctuelle manuelle :
+     *                       contourne l'éligibilité/échéance SANS
+     *                       réactiver une source désactivée.
+     */
+    public function __construct(public int $sourceId, public bool $force = false) {}
 
     public function uniqueId(): string
     {
@@ -99,7 +104,14 @@ final class FetchFeedJob implements ShouldBeUnique, ShouldQueue
     {
         $source = Source::find($this->sourceId);
 
-        return $source !== null && $source->isEligibleForFetch() && $source->isDue() ? $source : null;
+        if ($source === null) {
+            return null;
+        }
+        if ($this->force) {
+            return $source; // tentative ponctuelle — pas de changement d'état
+        }
+
+        return $source->isEligibleForFetch() && $source->isDue() ? $source : null;
     }
 
     private function collect(

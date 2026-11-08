@@ -106,4 +106,43 @@ class SourcesErrorFilterTest extends TestCase
             ->assertForbidden();
         $this->assertFalse((bool) $s->fresh()->is_active);
     }
+
+    public function test_relance_dispatch_force_sans_reactivation(): void
+    {
+        Queue::fake();
+        $u = User::factory()->create();
+        $s = Source::factory()->create(['is_active' => false, 'fail_count' => 9]);
+        $u->userSources()->create(['source_id' => $s->id, 'created_at' => now(), 'updated_at' => now()]);
+        $sub = $u->userSources->first();
+
+        $r = $this->actingAs($u)->post("/sources/{$sub->id}/retry")->assertRedirect();
+        Queue::assertPushed(FetchFeedJob::class,
+            fn ($j) => $j->sourceId === $s->id && $j->force === true);
+        $this->assertFalse((bool) $s->fresh()->is_active); // jamais réactivée
+        $this->assertStringContainsString('Relance enregistrée', session('status'));
+    }
+
+    public function test_relance_refusee_autre_utilisateur_et_get(): void
+    {
+        $u1 = User::factory()->create();
+        $u2 = User::factory()->create();
+        $s = Source::factory()->create(['fail_count' => 2]);
+        $u1->userSources()->create(['source_id' => $s->id, 'created_at' => now(), 'updated_at' => now()]);
+        $sub = $u1->userSources->first();
+        $this->actingAs($u2)->post("/sources/{$sub->id}/retry")->assertForbidden();
+        $this->actingAs($u1)->get("/sources/{$sub->id}/retry")->assertMethodNotAllowed();
+    }
+
+    public function test_relance_en_cours_detectee(): void
+    {
+        $u = User::factory()->create();
+        $s = Source::factory()->create(['fail_count' => 2]);
+        $u->userSources()->create(['source_id' => $s->id, 'created_at' => now(), 'updated_at' => now()]);
+        $sub = $u->userSources->first();
+        Cache::put(FetchFeedJob::lockKey($s->id), '1', 60);
+        Queue::fake();
+        $this->actingAs($u)->post("/sources/{$sub->id}/retry")->assertRedirect();
+        Queue::assertNothingPushed();
+        $this->assertStringContainsString('déjà en cours', session('status'));
+    }
 }

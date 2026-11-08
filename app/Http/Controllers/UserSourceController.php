@@ -12,6 +12,8 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use App\Jobs\FetchFeedJob;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Gate;
 
 class UserSourceController extends Controller
@@ -122,5 +124,25 @@ class UserSourceController extends Controller
         ]);
 
         return back()->with('status', 'Source « '.$userSource->source->name.' » réactivée.');
+    }
+
+    /**
+     * M12.18 — relance manuelle ponctuelle : dispatch d'un
+     * FetchFeedJob(force) — dédup native par sourceId + verrou
+     * existant préservés. Une source désactivée n'est PAS réactivée.
+     */
+    public function retry(Request $request, UserSource $userSource): RedirectResponse
+    {
+        Gate::authorize('view', $userSource);
+        $source = $userSource->source;
+
+        // Collecte en cours ? Le verrou du job le signale déjà.
+        if (Cache::has(FetchFeedJob::lockKey($source->id))) {
+            return back()->with('status', 'Une collecte est déjà en cours pour cette source.');
+        }
+
+        FetchFeedJob::dispatch($source->id, true);
+
+        return back()->with('status', 'Relance enregistrée — le résultat sera visible à la prochaine mise à jour.');
     }
 }

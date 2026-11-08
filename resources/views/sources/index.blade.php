@@ -172,6 +172,15 @@
                                                     Dernier succès : {{ $subscription->source->last_success_at?->format('d/m/Y H:i') ?? '—' }}
                                                 </p>
 
+                                                <form method="POST" action="{{ route('sources.retry', $subscription) }}"
+                                                      class="inline">
+                                                    @csrf
+                                                    <button type="submit"
+                                                            onclick="this.disabled=true;this.form.submit()"
+                                                            class="mt-1 inline-flex items-center px-2.5 py-1 text-xs font-medium rounded border border-slate-300 text-slate-700 hover:bg-slate-50">
+                                                        Relancer la collecte
+                                                    </button>
+                                                </form>
                                                 @if (! $subscription->source->is_active)
 
                                                 @endif
