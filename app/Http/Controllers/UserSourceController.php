@@ -105,4 +105,22 @@ class UserSourceController extends Controller
 
         return back()->with('status', 'Désabonnement effectué.');
     }
+
+    /**
+     * M12.16.1 — réactivation manuelle d'une source désactivée après
+     * échecs répétés : remise à zéro du compteur d'échecs ; la collecte
+     * la reprendra au prochain cycle. Action explicite de l'abonné.
+     */
+    public function reactivate(Request $request, UserSource $userSource): RedirectResponse
+    {
+        Gate::authorize('view', $userSource);
+
+        $userSource->source()->update([
+            'is_active' => true,
+            'fail_count' => 0,
+            'last_error' => null,
+        ]);
+
+        return back()->with('status', 'Source « '.$userSource->source->name.' » réactivée.');
+    }
 }

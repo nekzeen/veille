@@ -46,6 +46,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/sources/confirm', [UserSourceController::class, 'storeDetected'])->name('sources.confirm');
     });
     Route::delete('/sources/{userSource}', [UserSourceController::class, 'destroy'])->name('sources.unsubscribe');
+    Route::post('/sources/{userSource}/reactivate', [UserSourceController::class, 'reactivate'])
+        ->name('sources.reactivate');
 
     Route::get('/veilles', [VeilleController::class, 'index'])->name('veilles.index');
     Route::get('/veilles/create', [VeilleController::class, 'create'])->name('veilles.create');

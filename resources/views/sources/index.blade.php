@@ -176,6 +176,16 @@
 
                                                 @endif
                                             </div>
+                                                @if (! $subscription->source->is_active)
+                                                    <form method="POST" action="{{ route('sources.reactivate', $subscription) }}"
+                                                          class="inline">
+                                                        @csrf
+                                                        <button type="submit"
+                                                                class="mt-1 inline-flex items-center px-2.5 py-1 text-xs font-medium rounded border border-red-300 text-red-700 hover:bg-red-100">
+                                                            Réactiver
+                                                        </button>
+                                                    </form>
+                                                @endif
                                         @endif
                                     </div>
                                     <div class="shrink-0">

@@ -75,4 +75,35 @@ class SourcesErrorFilterTest extends TestCase
         $this->actingAs($u)->get('/sources?error=1')->assertSee('Motif non enregistré');
     }
 
+    public function test_reactivation_remet_a_zero_et_sort_du_filtre(): void
+    {
+        $u = User::factory()->create();
+        $s = Source::factory()->create([
+            'name' => 'SourceR', 'fail_count' => 10, 'is_active' => false,
+            'last_error' => 'TimeoutException: x',
+        ]);
+        $u->userSources()->create(['source_id' => $s->id, 'created_at' => now(), 'updated_at' => now()]);
+
+        $this->actingAs($u)->post("/sources/{$u->userSources->first()->id}/reactivate")
+            ->assertRedirect();
+
+        $f = $s->fresh();
+        $this->assertTrue((bool) $f->is_active);
+        $this->assertSame(0, $f->fail_count);
+        $this->assertNull($f->last_error);
+        // Sortie du filtre erreurs (le flash « réactivée » conserve le nom).
+        $this->actingAs($u)->get('/sources?error=1')->assertDontSee('Échecs consécutifs');
+    }
+
+    public function test_reactivation_refusee_pour_autre_utilisateur(): void
+    {
+        $u1 = User::factory()->create();
+        $u2 = User::factory()->create();
+        $s = Source::factory()->create(['is_active' => false, 'fail_count' => 9]);
+        $u1->userSources()->create(['source_id' => $s->id, 'created_at' => now(), 'updated_at' => now()]);
+
+        $this->actingAs($u2)->post("/sources/{$u1->userSources->first()->id}/reactivate")
+            ->assertForbidden();
+        $this->assertFalse((bool) $s->fresh()->is_active);
+    }
 }
