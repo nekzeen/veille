@@ -8,6 +8,7 @@
         ['route' => 'exclusions.index', 'active' => ['exclusions.*'], 'label' => 'Mes exclusions'],
         ['route' => 'shares.index', 'active' => ['shares.*'], 'label' => 'Mes partages'],
         ['route' => 'sources.index', 'active' => ['sources.index'], 'label' => 'Mes sources'],
+        ['route' => 'sources.catalogue', 'active' => ['sources.catalogue'], 'label' => 'Catalogue'],
     ];
 @endphp
 

@@ -17,6 +17,12 @@
 
                     <form method="GET" action="{{ route('sources.catalogue') }}" class="mb-6 flex flex-col gap-2 sm:flex-row">
                         <x-text-input type="text" name="q" value="{{ $search }}" placeholder="Rechercher une source…" class="w-full" />
+                        <select name="theme" class="rounded-md border-gray-300 text-sm shadow-sm">
+                            <option value="">Toutes les thématiques</option>
+                            @foreach ($themes as $theme)
+                                <option value="{{ $theme->id }}" @selected($themeId === $theme->id)>{{ $theme->name }}</option>
+                            @endforeach
+                        </select>
                         <x-primary-button type="submit">Rechercher</x-primary-button>
                     </form>
 
@@ -27,8 +33,15 @@
                             @foreach ($sources as $source)
                                 <li class="py-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                                     <div class="min-w-0">
-                                        <p class="font-medium text-gray-900">{{ $source->name }}</p>
+                                        <p class="font-medium text-gray-900">{{ $source->name }}
+                                            @if ($source->theme)
+                                                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700">{{ $source->theme->name }}</span>
+                                            @endif
+                                        </p>
                                         <p class="text-sm text-gray-500 break-all">{{ $source->feed_url }}</p>
+                                        @if ($source->site_url)
+                                            <p class="text-sm text-indigo-700 break-all"><a href="{{ $source->site_url }}" target="_blank" rel="noopener" class="hover:underline">{{ $source->site_url }}</a></p>
+                                        @endif
                                         @if ($source->description)
                                             <p class="text-sm text-gray-600 mt-1">{{ $source->description }}</p>
                                         @endif
