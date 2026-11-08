@@ -363,11 +363,14 @@ class VeillesCrudTest extends TestCase
         $this->assertDatabaseHas('articles', ['id' => $article->id]);
     }
 
-    public function test_create_rolls_back_everything_when_a_source_is_inaccessible(): void
+    public function test_create_rolls_back_everything_when_a_source_is_withdrawn(): void
     {
         $user = User::factory()->create();
-        // Source personnelle d'un autre utilisateur : subscribe() lève.
-        $private = Source::factory()->create(['is_catalogue' => false]);
+        // M14 — source retirée du catalogue : subscribe() lève toujours
+        // (seules les sources actives sont abonnables).
+        $private = Source::factory()->create([
+            'is_catalogue' => true, 'catalogue_state' => 'withdrawn',
+        ]);
 
         try {
             app(VeilleService::class)->create(

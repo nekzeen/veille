@@ -79,9 +79,9 @@ class CatalogueActivityTest extends TestCase
 
     public function test_source_privee_jamais_ecrite(): void
     {
-        $a = Source::factory()->create(['is_catalogue' => false]);
+        $a = Source::factory()->create(['catalogue_state' => 'withdrawn']);
         $preset = Carbon::parse('2026-02-02 00:00:00', 'UTC');
-        $b = Source::factory()->create(['is_catalogue' => false, 'catalogue_inactive_at' => $preset]);
+        $b = Source::factory()->create(['catalogue_state' => 'withdrawn', 'catalogue_inactive_at' => $preset]);
         $this->svc()->reevaluate([$a, $b]);
         $this->assertNull($a->fresh()->catalogue_inactive_at);
         $this->assertTrue($preset->equalTo($b->fresh()->catalogue_inactive_at));
@@ -120,7 +120,7 @@ class CatalogueActivityTest extends TestCase
 
         $fresh = $s->fresh();
         $this->assertNotNull($fresh->catalogue_inactive_at);
-        $this->assertTrue((bool) $fresh->is_catalogue); // pas de retrait
+        $this->assertSame('active', $fresh->catalogue_state); // pas de retrait
         $this->assertSame(1, Article::where('source_id', $s->id)->count());
     }
 
@@ -199,7 +199,7 @@ class CatalogueActivityTest extends TestCase
 
     public function test_commande_ignore_sources_privees(): void
     {
-        $p = Source::factory()->create(['is_catalogue' => false]);
+        $p = Source::factory()->create(['catalogue_state' => 'withdrawn']);
         $this->artisan('catalogue:reconcile-activity', ['--execute' => true])
             ->expectsOutputToContain('0 source(s) catalogue analysée(s)')
             ->assertExitCode(0);

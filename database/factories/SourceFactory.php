@@ -24,6 +24,6 @@ class SourceFactory extends Factory
 
     public function catalogue(): static
     {
-        return $this->state(fn () => ['is_catalogue' => true]);
+        return $this->state(fn () => ['is_catalogue' => true, 'catalogue_state' => 'active']);
     }
 }

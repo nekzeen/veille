@@ -117,11 +117,26 @@ class CatalogueTest extends TestCase
         $this->assertSame(1, UserSource::where('user_id', $this->user->id)->count());
     }
 
-    public function test_source_privee_refusee_a_l_abonnement(): void
+    public function test_source_retiree_refusee_a_l_abonnement(): void
     {
-        $src = Source::factory()->create(['is_catalogue' => false]);
+        // M14 : seule une source retirée du catalogue est refusée ;
+        // toute source commune active est abonnable par tous.
+        $src = Source::factory()->create([
+            'is_catalogue' => true, 'catalogue_state' => 'withdrawn',
+        ]);
         $this->actingAs($this->user)->post("/sources/{$src->id}/subscribe")
             ->assertForbidden();
+        $this->assertSame(0, UserSource::count());
+    }
+
+    public function test_source_commune_abonnable_par_tout_utilisateur(): void
+    {
+        // M14 : plus de propriété — même créée par un autre utilisateur,
+        // une source commune active est abonnable par tous.
+        $src = $this->catSource();
+        $other = User::factory()->create();
+        $this->actingAs($other)->post("/sources/{$src->id}/subscribe");
+        $this->assertDatabaseHas('user_sources', ['user_id' => $other->id, 'source_id' => $src->id]);
     }
 
     public function test_pas_de_fuite_donnees_personnelles(): void

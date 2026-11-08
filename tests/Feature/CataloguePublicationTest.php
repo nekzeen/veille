@@ -9,7 +9,6 @@ use App\Models\SourceTheme;
 use App\Models\User;
 use App\Models\UserSource;
 use App\Models\Veille;
-use App\Services\Feed\Detection\SourceNotCollectableException;
 use App\Services\Feed\FeedClientInterface;
 use App\Services\Feed\IpResolverInterface;
 use App\Services\Feed\SecureFeedClient;
@@ -76,7 +75,7 @@ class CataloguePublicationTest extends TestCase
         $this->fakeHttp([self::okFeed()]);
         [$src] = $this->svc()->addDetectedSource($this->user, 'https://ex.com/feed.xml', null, $this->theme->id);
 
-        $this->assertTrue((bool) $src->is_catalogue);
+        $this->assertSame('active', $src->catalogue_state);
         $this->assertSame($this->theme->id, $src->theme_id);
         $this->assertDatabaseHas('user_sources', ['user_id' => $this->user->id, 'source_id' => $src->id]);
     }
@@ -95,7 +94,7 @@ class CataloguePublicationTest extends TestCase
 
     public function test_source_catalogue_existante_reutilisee_sans_doublon(): void
     {
-        $other = Source::factory()->create(['is_catalogue' => true,
+        $other = Source::factory()->create(['catalogue_state' => 'active',
             'feed_url' => 'https://ex.com/feed.xml', 'theme_id' => $this->theme->id]);
         $this->fakeHttp([self::okFeed()]);
 
@@ -106,21 +105,27 @@ class CataloguePublicationTest extends TestCase
         $this->assertSame($this->theme->id, $src->theme_id); // thématique NON écrasée
     }
 
-    public function test_source_privee_historique_pas_publiee_automatiquement(): void
+    public function test_source_retiree_republiee_apres_revalidation(): void
     {
-        $src = Source::factory()->create(['is_catalogue' => false, 'feed_url' => 'https://ex.com/feed.xml']);
+        // M14 : plus de privée — une source retirée (commune) connue
+        // par URL est revalidée puis réactivée ; même enregistrement.
+        $src = Source::factory()->create([
+            'is_catalogue' => true, 'catalogue_state' => 'withdrawn',
+            'feed_url' => 'https://ex.com/feed.xml',
+        ]);
         UserSource::create(['user_id' => $this->user->id, 'source_id' => $src->id, 'created_at' => now()]);
         $this->fakeHttp([self::okFeed()]);
 
         [$reused] = $this->svc()->addDetectedSource($this->user, 'https://ex.com/feed.xml', null, $this->theme->id);
 
-        $this->assertFalse((bool) $reused->is_catalogue);  // reste privée
-        $this->assertNull($reused->theme_id);              // pas de thème forcée
+        $this->assertSame('active', $reused->catalogue_state);     // réactivée
+        $this->assertSame($src->id, $reused->id);                  // même enregistrement
+        $this->assertSame(1, Source::count());                     // pas de doublon
     }
 
     public function test_source_privee_inaccessible_aux_autres_utilisateurs(): void
     {
-        $src = Source::factory()->create(['is_catalogue' => false]);
+        $src = Source::factory()->create(['catalogue_state' => 'withdrawn']);
         UserSource::create(['user_id' => $this->user->id, 'source_id' => $src->id, 'created_at' => now()]);
         $stranger = User::factory()->create();
 
@@ -130,7 +135,7 @@ class CataloguePublicationTest extends TestCase
 
     public function test_second_utilisateur_abonnable_au_catalogue(): void
     {
-        $src = Source::factory()->create(['is_catalogue' => true]);
+        $src = Source::factory()->create(['catalogue_state' => 'active']);
         $u2 = User::factory()->create();
         $this->svc()->subscribe($u2, $src);
         $this->assertDatabaseHas('user_sources', ['user_id' => $u2->id, 'source_id' => $src->id]);
@@ -168,7 +173,7 @@ class CataloguePublicationTest extends TestCase
 
     public function test_custom_name_reste_personnel(): void
     {
-        $src = Source::factory()->create(['is_catalogue' => true]);
+        $src = Source::factory()->create(['catalogue_state' => 'active']);
         $u2 = User::factory()->create();
         UserSource::create(['user_id' => $u2->id, 'source_id' => $src->id, 'custom_name' => 'Mon flux', 'created_at' => now()]);
 
@@ -180,33 +185,34 @@ class CataloguePublicationTest extends TestCase
     public function test_rattachement_a_une_veille_conserve(): void
     {
         $v = Veille::factory()->create(['user_id' => $this->user->id]);
-        $src = Source::factory()->create(['is_catalogue' => true]);
+        $src = Source::factory()->create(['catalogue_state' => 'active']);
         DB::table('source_veille')->insert(['veille_id' => $v->id, 'source_id' => $src->id, 'user_id' => $this->user->id]);
         $this->assertDatabaseHas('source_veille', ['veille_id' => $v->id, 'source_id' => $src->id]);
     }
 
-    public function test_source_privee_autre_utilisateur_refusee_sans_fuite(): void
+    public function test_source_retiree_abonnee_par_autrui_republiee_et_abonnee(): void
     {
-        // M13.2c — trou comblé : un autre abonné privé n'est jamais
-        // abonné via la re-détection, message générique.
-        $src = Source::factory()->create(['is_catalogue' => false,
-            'feed_url' => 'https://ex.com/feed.xml']);
+        // M14 : plus de privée — une source retirée déjà abonnée par un
+        // autre utilisateur est commune : la revalidation la réactive
+        // et abonne le demandeur. Abonnements individuels, aucun lien
+        // vers les données personnelles de l'autre utilisateur.
+        $src = Source::factory()->create(['is_catalogue' => true,
+            'catalogue_state' => 'withdrawn', 'feed_url' => 'https://ex.com/feed.xml']);
         $stranger = User::factory()->create();
         UserSource::create(['user_id' => $stranger->id, 'source_id' => $src->id, 'created_at' => now()]);
         $this->fakeHttp([self::okFeed()]);
 
-        try {
-            $this->svc()->addDetectedSource($this->user, 'https://ex.com/feed.xml', null, $this->theme->id);
-            $this->fail('refus attendu');
-        } catch (SourceNotCollectableException $e) {
-            $this->assertSame('Cette URL ne peut pas être ajoutée.', $e->getMessage());
-        }
-        $this->assertSame(0, UserSource::where('user_id', $this->user->id)->count());
+        [$reused] = $this->svc()->addDetectedSource($this->user, 'https://ex.com/feed.xml', null, $this->theme->id);
+
+        $this->assertSame('active', $reused->fresh()->catalogue_state);
+        $this->assertDatabaseHas('user_sources', ['user_id' => $this->user->id, 'source_id' => $src->id]);
+        $this->assertSame(2, UserSource::where('source_id', $src->id)->count());
+        $this->assertSame(1, Source::count()); // pas de doublon
     }
 
     public function test_source_deja_suivie_pas_de_doublon_abonnement(): void
     {
-        $src = Source::factory()->create(['is_catalogue' => true,
+        $src = Source::factory()->create(['catalogue_state' => 'active',
             'feed_url' => 'https://ex.com/feed.xml']);
         UserSource::create(['user_id' => $this->user->id, 'source_id' => $src->id, 'created_at' => now()]);
         $this->fakeHttp([self::okFeed()]);
@@ -240,19 +246,19 @@ class CataloguePublicationTest extends TestCase
     public function test_reutilisation_ne_modifie_ni_catalogue_ni_theme(): void
     {
         $other = SourceTheme::skip(1)->first();
-        $src = Source::factory()->create(['is_catalogue' => true,
+        $src = Source::factory()->create(['catalogue_state' => 'active',
             'feed_url' => 'https://ex.com/feed.xml', 'theme_id' => $other->id]);
         $this->fakeHttp([self::okFeed()]);
 
         [$reused] = $this->svc()->addDetectedSource($this->user, 'https://ex.com/feed.xml', null, $this->theme->id);
-        $this->assertTrue((bool) $reused->is_catalogue);
+        $this->assertSame('active', $reused->catalogue_state);
         $this->assertSame($other->id, $reused->theme_id); // inchangée
     }
 
     public function test_pas_de_fuite_donnees_personnelles(): void
     {
         // Les infos « catalogue » n'exposent pas les abonnements d'autrui.
-        $src = Source::factory()->create(['is_catalogue' => true]);
+        $src = Source::factory()->create(['catalogue_state' => 'active']);
         $u2 = User::factory()->create();
         UserSource::create(['user_id' => $u2->id, 'source_id' => $src->id, 'custom_name' => 'Secret', 'created_at' => now()]);
 

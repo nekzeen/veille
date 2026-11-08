@@ -3,10 +3,18 @@
 namespace Tests\Feature;
 
 use App\Models\Source;
+use App\Models\SourceTheme;
 use App\Models\User;
 use App\Models\UserSource;
+use App\Services\Feed\FeedClientInterface;
+use App\Services\Feed\IpResolverInterface;
+use App\Services\Feed\SecureFeedClient;
 use App\Services\SourceSubscriptionService;
 use Carbon\Carbon;
+use GuzzleHttp\Client;
+use GuzzleHttp\Handler\MockHandler;
+use GuzzleHttp\HandlerStack;
+use GuzzleHttp\Psr7\Response;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -21,11 +29,35 @@ class SourcesTest extends TestCase
         return Source::factory()->catalogue()->create();
     }
 
+    private function fakeHttp(): void
+    {
+        $stack = HandlerStack::create(new MockHandler([
+            new Response(200, ['Content-Type' => 'application/rss+xml'],
+                (string) file_get_contents(base_path('tests/fixtures/feeds/rss20_basic.xml'))),
+            new Response(200, ['Content-Type' => 'application/rss+xml'],
+                (string) file_get_contents(base_path('tests/fixtures/feeds/rss20_basic.xml'))),
+        ]));
+        $resolver = new class implements IpResolverInterface
+        {
+            public function resolve(string $host): array
+            {
+                return ['93.184.216.34'];
+            }
+        };
+        $this->app->instance(FeedClientInterface::class,
+            new SecureFeedClient($resolver, new Client(['handler' => $stack])));
+    }
+
+    private function themeId(): int
+    {
+        return SourceTheme::firstOrCreate(['slug' => 'autres'], ['name' => 'Autres'])->id;
+    }
+
     public function test_catalogue_is_visible_to_authenticated_user(): void
     {
         $user = User::factory()->create();
         $catalogue = $this->catalogueSource();
-        $personal = Source::factory()->create(['is_catalogue' => false]);
+        $personal = Source::factory()->create(['catalogue_state' => 'withdrawn']);
 
         $response = $this->actingAs($user)->get(route('sources.catalogue'));
 
@@ -70,33 +102,41 @@ class SourcesTest extends TestCase
         $this->assertNull($source->fresh()->orphaned_at);
     }
 
-    public function test_user_can_add_personal_source(): void
+    public function test_user_can_add_source_by_url_validated(): void
     {
+        // M14 : le formulaire par URL valide et détecte le flux puis
+        // publie la source au catalogue commun — jamais privée.
         $user = User::factory()->create();
+        $this->fakeHttp();
 
         $this->actingAs($user)
-            ->post(route('sources.personal'), ['feed_url' => 'https://Example.com:443/FEED?utm=1'])
-            ->assertRedirect(route('sources.index'));
+            ->post(route('sources.personal'), [
+                'feed_url' => 'https://example.com/feed',
+                'theme_id' => $this->themeId(),
+            ])->assertRedirect(route('sources.index'));
 
-        // Normalisation B.1 : hôte minuscule, port 443 retiré, query conservée.
         $this->assertDatabaseHas('sources', [
-            'feed_url' => 'https://example.com/FEED?utm=1',
-            'is_catalogue' => false,
+            'feed_url' => 'https://example.com/feed',
+            'is_catalogue' => true,
+            'catalogue_state' => 'active',
         ]);
         $this->assertDatabaseHas('user_sources', ['user_id' => $user->id]);
     }
 
-    public function test_personal_source_reuses_existing_technical_source(): void
+    public function test_url_form_reuses_existing_common_source(): void
     {
-        // M13.3b : seule une source du catalogue est réutilisable par URL.
-        $existing = Source::factory()->create([
+        // M14 : URL connue → même enregistrement commun, pas de doublon.
+        $existing = Source::factory()->catalogue()->create([
             'feed_url' => 'https://example.com/feed',
-            'is_catalogue' => true,
         ]);
         $user = User::factory()->create();
+        $this->fakeHttp();
 
         $this->actingAs($user)
-            ->post(route('sources.personal'), ['feed_url' => 'https://example.com/feed']);
+            ->post(route('sources.personal'), [
+                'feed_url' => 'https://example.com/feed',
+                'theme_id' => $this->themeId(),
+            ]);
 
         $this->assertSame(1, Source::where('feed_url', 'https://example.com/feed')->count());
         $this->assertDatabaseHas('user_sources', [
@@ -105,24 +145,31 @@ class SourcesTest extends TestCase
         ]);
     }
 
-    public function test_personal_source_private_of_another_is_refused(): void
+    public function test_withdrawn_source_of_another_revalidated_and_republished(): void
     {
-        // M13.3b — trou d'isolation fermé : une source privée n'est
-        // jamais rattachée par simple connaissance de son URL.
+        // M14 : plus de privée — une source retirée connue par URL est
+        // revalidée puis réactivée ; l'abonné existant est conservé et
+        // le demandeur est abonné. Jamais de fuite ni de doublon.
         $existing = Source::factory()->create([
             'feed_url' => 'https://example.com/feed',
-            'is_catalogue' => false,
+            'is_catalogue' => true, 'catalogue_state' => 'withdrawn',
         ]);
         UserSource::create(['user_id' => User::factory()->create()->id,
             'source_id' => $existing->id, 'created_at' => now()]);
         $user = User::factory()->create();
+        $this->fakeHttp();
 
         $this->actingAs($user)
-            ->post(route('sources.personal'), ['feed_url' => 'https://example.com/feed'])
-            ->assertSessionHasErrors(['feed_url' => 'Cette URL ne peut pas être ajoutée.']);
+            ->post(route('sources.personal'), [
+                'feed_url' => 'https://example.com/feed',
+                'theme_id' => $this->themeId(),
+            ])->assertRedirect(route('sources.index'));
 
+        $f = $existing->fresh();
         $this->assertSame(1, Source::count());
-        $this->assertDatabaseMissing('user_sources', ['user_id' => $user->id]);
+        $this->assertSame('active', $f->catalogue_state);
+        $this->assertSame(2, UserSource::where('source_id', $existing->id)->count());
+        $this->assertDatabaseHas('user_sources', ['user_id' => $user->id, 'source_id' => $existing->id]);
     }
 
     public function test_no_duplicate_subscription(): void
@@ -164,21 +211,23 @@ class SourcesTest extends TestCase
         $this->assertSame(0, Source::count());
     }
 
-    public function test_personal_source_orphaned_flag_rules(): void
+    public function test_common_source_lifecycle_flags_on_unsubscribe(): void
     {
+        // M14 : `orphaned_at` dormante ; le dernier lien retiré marque
+        // l'inactivité catalogue — réabonnement possible (commune).
         $user = User::factory()->create();
-        $source = Source::factory()->create(['is_catalogue' => false]);
+        $source = Source::factory()->catalogue()->create();
         $subscription = UserSource::factory()->for($user)->for($source)->create();
 
-        // Sans articles ni veilles : la source devient orpheline.
         $this->actingAs($user)->delete(route('sources.unsubscribe', $subscription));
-        $this->assertNotNull($source->fresh()->orphaned_at);
+        $f = $source->fresh();
+        $this->assertNull($f->orphaned_at);
+        $this->assertNotNull($f->catalogue_inactive_at);
 
-        // Réabonnement → la source n'est plus orpheline et n'a jamais été supprimée.
+        // Réabonnement : source commune abonnable à nouveau.
         $this->actingAs($user)->post(route('sources.subscribe', $source))
-            ->assertForbidden(); // non catalogue + non enregistrée → inaccessible
-
-        // Toujours présente en base (jamais de suppression directe).
+            ->assertRedirect();
+        $this->assertNull($source->fresh()->catalogue_inactive_at);
         $this->assertDatabaseHas('sources', ['id' => $source->id]);
     }
 
@@ -228,7 +277,7 @@ class SourcesTest extends TestCase
     public function test_service_timestamps_are_written_in_utc(): void
     {
         $user = User::factory()->create();
-        $source = Source::factory()->create(['is_catalogue' => false]);
+        $source = Source::factory()->create(['catalogue_state' => 'withdrawn']);
         $subscription = UserSource::factory()->for($user)->for($source)->create();
 
         $this->actingAs($user)->delete(route('sources.unsubscribe', $subscription));
@@ -245,7 +294,7 @@ class SourcesTest extends TestCase
     {
         $userA = User::factory()->create();
         $userB = User::factory()->create();
-        $source = Source::factory()->create(['is_catalogue' => false]);
+        $source = Source::factory()->create(['catalogue_state' => 'withdrawn']);
         UserSource::factory()->for($userA)->for($source)->create();
         UserSource::factory()->for($userB)->for($source)->create();
 

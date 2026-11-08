@@ -185,7 +185,7 @@ class SourceAddFlowTest extends TestCase
         // M13.2c : seule une source du catalogue est réutilisable par un
         // autre utilisateur — une privée serait refusée (garde-fou).
         $source = Source::factory()->create([
-            'is_catalogue' => true,
+            'catalogue_state' => 'active',
             'feed_url' => 'https://exemple.fr/page',
             'connector' => 'html',
             'config' => ['version' => 1, 'strategy' => 'selectors', 'enrich_pages' => 2, 'selectors' => ['item' => 'article']],
@@ -260,16 +260,33 @@ class SourceAddFlowTest extends TestCase
         ])->assertOk()->assertJsonPath('preview.items', []);
     }
 
-    public function test_formulaire_historique_toujours_operationnel(): void
+    public function test_formulaire_url_passe_par_validation_complete(): void
     {
-        // Régression : l'ajout direct RSS (hors détection) inchangé.
+        // M14 : l'ajout par URL conserve le formulaire mais passe par
+        // la détection/validation complète + thématique obligatoire.
+        $this->fakeHttp([self::ok(self::fixture('feeds/rss20_basic.xml'), 'application/rss+xml'), self::ok(self::fixture('feeds/rss20_basic.xml'), 'application/rss+xml')]);
         $this->actingAs(User::factory()->create())
-            ->post(route('sources.personal'), ['feed_url' => 'https://exemple.fr/flux.xml'])
-            ->assertRedirect(route('sources.index'));
+            ->post(route('sources.personal'), [
+                'feed_url' => 'https://exemple.fr/feed.xml',
+                'theme_id' => SourceTheme::firstOrFail()->id,
+            ])->assertRedirect(route('sources.index'));
 
         $source = Source::sole();
-        $this->assertSame('https://exemple.fr/flux.xml', $source->feed_url);
-        $this->assertSame('rss', $source->connector);
-        $this->assertSame('validated', $source->config_state);
+        $this->assertSame('https://exemple.fr/feed.xml', $source->feed_url);
+        $this->assertTrue((bool) $source->is_catalogue);           // publiée au catalogue
+        $this->assertSame('active', $source->catalogue_state);
+        $this->assertNotNull($source->theme_id);
+    }
+
+    public function test_formulaire_url_exige_thematique_et_reste_sans_ecriture(): void
+    {
+        // M14 : le formulaire par URL exige la thématique — aucun
+        // enregistrement ni abonnement sans elle (validation préalable,
+        // aucune détection déclenchée).
+        $this->actingAs(User::factory()->create())
+            ->post(route('sources.personal'), ['feed_url' => 'https://exemple.fr/feed.xml'])
+            ->assertSessionHasErrors('theme_id');
+        $this->assertSame(0, Source::count());
+        $this->assertSame(0, UserSource::count());
     }
 }

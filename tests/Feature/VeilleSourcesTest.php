@@ -64,7 +64,7 @@ class VeilleSourcesTest extends TestCase
     public function test_personal_subscribed_source_can_be_selected(): void
     {
         $user = User::factory()->create();
-        $source = Source::factory()->create(['is_catalogue' => false]);
+        $source = Source::factory()->create(['catalogue_state' => 'withdrawn']);
         UserSource::factory()->for($user)->for($source)->create();
 
         $this->actingAs($user)->post(route('veilles.store'), $this->payload([
@@ -81,7 +81,7 @@ class VeilleSourcesTest extends TestCase
     {
         $user = User::factory()->create();
         // Source personnelle appartenant à un autre abonné.
-        $foreign = Source::factory()->create(['is_catalogue' => false]);
+        $foreign = Source::factory()->create(['catalogue_state' => 'withdrawn']);
         UserSource::factory()->for(User::factory()->create())->for($foreign)->create();
 
         $this->actingAs($user)->post(route('veilles.store'), $this->payload([
@@ -158,9 +158,9 @@ class VeilleSourcesTest extends TestCase
     {
         $user = User::factory()->create();
         $catalogue = Source::factory()->catalogue()->create(['name' => 'Source catalogue X']);
-        $own = Source::factory()->create(['is_catalogue' => false, 'name' => 'Ma source perso']);
+        $own = Source::factory()->create(['catalogue_state' => 'withdrawn', 'name' => 'Ma source perso']);
         UserSource::factory()->for($user)->for($own)->create();
-        $foreign = Source::factory()->create(['is_catalogue' => false, 'name' => 'Source étrangère']);
+        $foreign = Source::factory()->create(['catalogue_state' => 'withdrawn', 'name' => 'Source étrangère']);
         UserSource::factory()->for(User::factory()->create())->for($foreign)->create();
 
         $this->actingAs($user)->get(route('veilles.create'))

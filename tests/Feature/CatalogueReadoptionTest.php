@@ -10,7 +10,6 @@ use App\Models\SourceTheme;
 use App\Models\User;
 use App\Models\UserSource;
 use App\Models\Veille;
-use App\Services\Feed\Detection\SourceNotCollectableException;
 use App\Services\Feed\FeedClientInterface;
 use App\Services\Feed\IpResolverInterface;
 use App\Services\Feed\SecureFeedClient;
@@ -25,7 +24,12 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
-/** M13.3c — réadoption des sources privées réellement inutilisées. */
+/**
+ * M14 — réactivation des sources communes retirées (catalogue_state =
+ * 'withdrawn'). Plus aucune source privée : une source retirée reste
+ * commune et ne revient au catalogue actif qu'après revalidation
+ * complète du flux + thématique.
+ */
 class CatalogueReadoptionTest extends TestCase
 {
     use RefreshDatabase;
@@ -61,11 +65,11 @@ class CatalogueReadoptionTest extends TestCase
             (string) file_get_contents(base_path('tests/fixtures/feeds/rss20_basic.xml')));
     }
 
-    /** Source privée historique inutilisée, orpheline depuis 30 jours. */
-    private function orphanPrivate(array $extra = []): Source
+    /** Source commune retirée du catalogue actif, sans lien par défaut. */
+    private function withdrawnSource(array $extra = []): Source
     {
         return Source::factory()->create(array_merge([
-            'is_catalogue' => false, 'feed_url' => self::FEED,
+            'is_catalogue' => true, 'catalogue_state' => 'withdrawn', 'feed_url' => self::FEED,
             'orphaned_at' => now('UTC')->subDays(30), 'theme_id' => null,
         ], $extra));
     }
@@ -76,9 +80,9 @@ class CatalogueReadoptionTest extends TestCase
             $payload + ['url' => self::FEED, 'theme_id' => $this->theme->id]);
     }
 
-    public function test_readoption_source_privee_inutilisee(): void
+    public function test_reactivation_source_retiree_apres_revalidation(): void
     {
-        $s = $this->orphanPrivate(['catalogue_inactive_at' => null]);
+        $s = $this->withdrawnSource();
         Article::factory()->count(3)->create(['source_id' => $s->id]);
         $this->fakeHttp([self::okFeed()]);
         $u = User::factory()->create();
@@ -87,60 +91,48 @@ class CatalogueReadoptionTest extends TestCase
 
         $f = $s->fresh();
         $this->assertSame(1, Source::count());                       // même enregistrement, pas de doublon
-        $this->assertTrue((bool) $f->is_catalogue);
-        $this->assertSame($this->theme->id, $f->theme_id);           // thématique renseignée
+        $this->assertTrue((bool) $f->is_catalogue);                  // toujours commune — jamais privée
+        $this->assertSame('active', $f->catalogue_state);
+        $this->assertSame($this->theme->id, $f->theme_id);
         $this->assertNull($f->catalogue_inactive_at);
-        $this->assertNull($f->orphaned_at);                          // M13.1 réévalué
+        $this->assertNull($f->orphaned_at);                          // M13.1 réévalué (source commune)
         $this->assertSame(3, Article::where('source_id', $s->id)->count());
         $this->assertDatabaseHas('user_sources', ['user_id' => $u->id, 'source_id' => $s->id]);
     }
 
-    public function test_source_retiree_et_orpheline_republiee_orphaned_at_remis_a_null(): void
+    public function test_source_retiree_avec_abonnement_existant_republiable(): void
     {
-        $s = $this->orphanPrivate(['catalogue_inactive_at' => now('UTC')->subDays(120)]);
-        $this->fakeHttp([self::okFeed()]);
-
-        $this->confirm(User::factory()->create())->assertOk();
-
-        $f = $s->fresh();
-        $this->assertTrue((bool) $f->is_catalogue);
-        $this->assertNull($f->catalogue_inactive_at);
-        $this->assertNull($f->orphaned_at);
-    }
-
-    public function test_refus_source_privee_encore_abonnee(): void
-    {
-        $s = $this->orphanPrivate(['orphaned_at' => null]);
+        // M14 : les liens sont conservés lors du retrait ; une source
+        // retirée ayant déjà un abonné n'est pas « privée » — la
+        // revalidation la réactive et ajoute l'abonnement du demandeur.
+        $s = $this->withdrawnSource(['orphaned_at' => null]);
         $owner = User::factory()->create();
         UserSource::create(['user_id' => $owner->id, 'source_id' => $s->id, 'created_at' => now()]);
-        $snap = DB::table('sources')->where('id', $s->id)->first();
         $this->fakeHttp([self::okFeed()]);
         $stranger = User::factory()->create();
 
-        $this->confirm($stranger)->assertStatus(422)
-            ->assertJsonPath('message', 'Cette URL ne peut pas être ajoutée.');
+        $this->confirm($stranger)->assertOk()->assertJsonPath('outcome', 'republished');
 
-        $this->assertEquals($snap, DB::table('sources')->where('id', $s->id)->first());
-        $this->assertSame(0, UserSource::where('user_id', $stranger->id)->count());
+        $f = $s->fresh();
+        $this->assertSame('active', $f->catalogue_state);
+        $this->assertSame(2, UserSource::where('source_id', $s->id)->count());
+        $this->assertDatabaseHas('user_sources', ['user_id' => $stranger->id, 'source_id' => $s->id]);
     }
 
-    public function test_refus_source_rattachee_a_une_veille(): void
+    public function test_source_retiree_rattachee_a_une_veille_republiable(): void
     {
-        $s = $this->orphanPrivate(['orphaned_at' => null]);
+        $s = $this->withdrawnSource(['orphaned_at' => null]);
         $v = Veille::factory()->create();
         DB::table('source_veille')->insert(['veille_id' => $v->id, 'source_id' => $s->id, 'user_id' => $v->user_id]);
         $this->fakeHttp([self::okFeed()]);
-        $stranger = User::factory()->create();
 
-        $this->confirm($stranger)->assertStatus(422)
-            ->assertJsonPath('message', 'Cette URL ne peut pas être ajoutée.');
-        $this->assertFalse((bool) $s->fresh()->is_catalogue);
-        $this->assertSame(0, UserSource::count());
+        $this->confirm(User::factory()->create())->assertOk()->assertJsonPath('outcome', 'republished');
+        $this->assertSame('active', $s->fresh()->catalogue_state);
     }
 
-    public function test_pas_de_publication_sans_validation_complete(): void
+    public function test_pas_de_reactivation_sans_validation_complete(): void
     {
-        $s = $this->orphanPrivate();
+        $s = $this->withdrawnSource();
         $u = User::factory()->create();
 
         // Flux invalide : refus, rien ne change.
@@ -148,13 +140,7 @@ class CatalogueReadoptionTest extends TestCase
         $this->confirm($u)->assertStatus(422);
         // Sans thématique : refus de validation.
         $this->actingAs($u)->postJson(route('sources.confirm'), ['url' => self::FEED])->assertUnprocessable();
-        // Ajout historique par URL (sans détection) : jamais de publication.
-        try {
-            app(SourceSubscriptionService::class)->addPersonalSource($u, self::FEED);
-            $this->fail('refus attendu');
-        } catch (SourceNotCollectableException) {
-        }
-        // Abonnement direct : refusé.
+        // Abonnement direct : une source retirée n'est jamais abonnable.
         try {
             app(SourceSubscriptionService::class)->subscribe($u, $s);
             $this->fail('refus attendu');
@@ -162,21 +148,20 @@ class CatalogueReadoptionTest extends TestCase
         }
 
         $f = $s->fresh();
-        $this->assertFalse((bool) $f->is_catalogue);
-        $this->assertNotNull($f->orphaned_at);
+        $this->assertSame('withdrawn', $f->catalogue_state);
         $this->assertSame(0, UserSource::count());
     }
 
-    public function test_isolation_entre_deux_utilisateurs_apres_readoption(): void
+    public function test_isolation_entre_deux_utilisateurs_apres_reactivation(): void
     {
-        $s = $this->orphanPrivate();
+        $s = $this->withdrawnSource();
         $this->fakeHttp([self::okFeed()]);
         [$a, $b] = User::factory()->count(2)->create();
 
         $this->confirm($a)->assertOk()->assertJsonPath('outcome', 'republished');
         UserSource::where('user_id', $a->id)->update(['custom_name' => 'Nom privé de A']);
 
-        // B réutilise désormais la source catalogue, sans voir A.
+        // B réutilise désormais la source commune, sans voir A.
         app(SourceSubscriptionService::class)->subscribe($b, $s->fresh());
         $this->assertNull(UserSource::where('user_id', $b->id)->value('custom_name'));
         $this->actingAs($b)->get('/sources/catalogue')->assertOk()->assertDontSee('Nom privé de A');
@@ -184,13 +169,14 @@ class CatalogueReadoptionTest extends TestCase
         $this->assertSame(2, UserSource::where('source_id', $s->id)->count());
     }
 
-    public function test_source_privee_inutilisee_reste_suivie_sans_readoption(): void
+    public function test_source_retiree_reste_commune_et_jamais_orpheline(): void
     {
-        // Aucune réadoption : la source reste orpheline, date conservée.
-        $s = $this->orphanPrivate();
-        $before = $s->orphaned_at;
+        // M14 : la réévaluation M13.1 ne peut plus marquer une source
+        // commune comme orpheline ; `orphaned_at` est dormante — une
+        // éventuelle date résiduelle est effacée, jamais re-créée.
+        $s = $this->withdrawnSource();
         app(SourceLifecycleService::class)->reevaluate($s);
-        $this->assertTrue($before->equalTo($s->fresh()->orphaned_at));
-        $this->assertFalse((bool) $s->fresh()->is_catalogue);
+        $this->assertNull($s->fresh()->orphaned_at);
+        $this->assertSame('withdrawn', $s->fresh()->catalogue_state);
     }
 }

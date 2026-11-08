@@ -5,11 +5,19 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Models\Source;
+use App\Models\SourceTheme;
 use App\Models\User;
 use App\Services\Feed\Connectors\ConnectorRegistry;
 use App\Services\Feed\Connectors\RssConnector;
 use App\Services\Feed\Exceptions\FeedParseException;
+use App\Services\Feed\FeedClientInterface;
+use App\Services\Feed\IpResolverInterface;
+use App\Services\Feed\SecureFeedClient;
 use App\Services\SourceSubscriptionService;
+use GuzzleHttp\Client;
+use GuzzleHttp\Handler\MockHandler;
+use GuzzleHttp\HandlerStack;
+use GuzzleHttp\Psr7\Response;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -33,11 +41,27 @@ class ConnectorRegistryTest extends TestCase
         app(ConnectorRegistry::class)->for($source);
     }
 
-    public function test_creation_manuelle_renseigne_les_champs_m8(): void
+    public function test_creation_detectee_renseigne_les_champs_m8(): void
     {
+        // M14 : toute création passe par la détection complète ; les
+        // champs M8 sont renseignés par le parcours détecté.
+        $stack = HandlerStack::create(new MockHandler([
+            new Response(200, ['Content-Type' => 'application/rss+xml; charset=utf-8'],
+                (string) file_get_contents(base_path('tests/fixtures/feeds/rss20_basic.xml'))),
+        ]));
+        $resolver = new class implements IpResolverInterface
+        {
+            public function resolve(string $host): array
+            {
+                return ['example.com' => ['93.184.216.34']][$host] ?? [];
+            }
+        };
+        app()->instance(FeedClientInterface::class,
+            new SecureFeedClient($resolver, new Client(['handler' => $stack])));
+        $theme = SourceTheme::create(['name' => 'X', 'slug' => 'x']);
         $user = User::factory()->create();
         [$source] = app(SourceSubscriptionService::class)
-            ->addPersonalSource($user, 'https://example.com/feed.xml');
+            ->addDetectedSource($user, 'https://example.com/feed.xml', null, $theme->id);
 
         $this->assertSame('https://example.com/feed.xml', $source->submitted_url);
         $this->assertSame('https://example.com/feed.xml', $source->fetch_url);

@@ -114,10 +114,10 @@ class FetchFeedsCommandTest extends TestCase
         Queue::assertNotPushed(FetchFeedJob::class);
     }
 
-    public function test_orphaned_source_is_not_examined(): void
+    public function test_withdrawn_source_is_not_examined(): void
     {
         Queue::fake();
-        $this->source(['orphaned_at' => now()]);
+        $this->source(['catalogue_state' => 'withdrawn']);
 
         $this->artisan('feeds:fetch')
             ->expectsOutputToContain('Sources examinées : 0')
@@ -166,7 +166,7 @@ class FetchFeedsCommandTest extends TestCase
         $this->dueSource();                                                         // due
         $this->source(['last_fetched_at' => now()->subMinutes(5)]);                 // pas due
         $this->source(['is_active' => false]);                                      // inactive
-        $this->source(['orphaned_at' => now()]);                                    // orpheline
+        $this->source(['catalogue_state' => 'withdrawn']);                          // retirée
         $this->source(['last_fetched_at' => now()->subMinutes(30), 'fail_count' => 3]); // backoff P6
 
         $this->artisan('feeds:fetch')

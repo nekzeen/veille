@@ -140,8 +140,9 @@ class CatalogueConcurrencyTest extends TestCase
         $this->assertTrue($refused);
 
         $row = DB::connection(self::AUX)->table('sources')->where('id', $source->id)->first();
-        $this->assertSame(0, (int) $row->is_catalogue);
-        $this->assertNotNull($row->catalogue_inactive_at);
+        $this->assertSame('withdrawn', $row->catalogue_state);
+        $this->assertSame(1, (int) $row->is_catalogue); // commune, même retirée
+        $this->assertNull($row->catalogue_inactive_at); // effacée au retrait M14
         $this->assertSame(0, DB::connection(self::AUX)->table('user_sources')->where('source_id', $source->id)->count());
     }
 
@@ -217,7 +218,8 @@ class CatalogueConcurrencyTest extends TestCase
         try {
             $this->on(self::AUX, fn () => $subs->subscribe($user, Source::find($source->id)));
         } finally {
-            $this->assertSame(0, (int) DB::connection(self::AUX)->table('sources')->where('id', $source->id)->value('is_catalogue'));
+            $this->assertSame('withdrawn', DB::connection(self::AUX)->table('sources')->where('id', $source->id)->value('catalogue_state'));
+            $this->assertSame(1, (int) DB::connection(self::AUX)->table('sources')->where('id', $source->id)->value('is_catalogue'));
             $this->assertSame(0, DB::connection(self::AUX)->table('user_sources')->where('source_id', $source->id)->count());
         }
     }
@@ -248,6 +250,7 @@ class CatalogueConcurrencyTest extends TestCase
         $this->assertFalse($this->on(self::AUX, fn () => $activity->withdrawIfStillInactive($source->id)));
 
         $row = DB::connection(self::AUX)->table('sources')->where('id', $source->id)->first();
+        $this->assertSame('active', $row->catalogue_state);
         $this->assertSame(1, (int) $row->is_catalogue);
         $this->assertNull($row->catalogue_inactive_at);
         $this->assertSame(1, DB::connection(self::AUX)->table('user_sources')

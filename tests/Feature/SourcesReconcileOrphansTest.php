@@ -20,7 +20,7 @@ class SourcesReconcileOrphansTest extends TestCase
 
     private function privateSource(array $extra = []): Source
     {
-        return Source::factory()->create(array_merge(['is_catalogue' => false], $extra));
+        return Source::factory()->create(array_merge(['catalogue_state' => 'withdrawn'], $extra));
     }
 
     private function subscribe(int $uid, int $sid): void
@@ -71,7 +71,7 @@ class SourcesReconcileOrphansTest extends TestCase
 
     public function test_source_catalogue_jamais_marquee(): void
     {
-        $src = Source::factory()->create(['is_catalogue' => true]);
+        $src = Source::factory()->catalogue()->create();
         $this->artisan('sources:reconcile-orphans', ['--execute' => true])->assertExitCode(0);
         $this->assertNull($src->fresh()->orphaned_at);
     }
@@ -101,12 +101,12 @@ class SourcesReconcileOrphansTest extends TestCase
         $this->assertSame('NomOrigine', $f->name);
         $this->assertSame(3, $f->fail_count);
         $this->assertFalse((bool) $f->is_active);
-        $this->assertFalse((bool) $f->is_catalogue);
+        $this->assertSame('withdrawn', $f->catalogue_state);
     }
 
     public function test_lots_sur_volume_superieur_au_chunk(): void
     {
-        Source::factory()->count(3)->create(['is_catalogue' => false]);
+        Source::factory()->count(3)->create(['catalogue_state' => 'withdrawn']);
         $code = Artisan::call('sources:reconcile-orphans', ['--execute' => true]);
         $this->assertSame(0, $code);
         $this->assertSame(3, Source::whereNotNull('orphaned_at')->count());

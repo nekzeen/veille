@@ -11,7 +11,6 @@ use App\Models\User;
 use App\Models\UserSource;
 use App\Models\Veille;
 use App\Services\CatalogueActivityService;
-use App\Services\Feed\Detection\SourceNotCollectableException;
 use App\Services\Feed\FeedClientInterface;
 use App\Services\Feed\IpResolverInterface;
 use App\Services\Feed\SecureFeedClient;
@@ -64,8 +63,8 @@ class CatalogueWithdrawalTest extends TestCase
     private function withdrawn(array $extra = []): Source
     {
         return Source::factory()->create(array_merge([
-            'is_catalogue' => false, 'feed_url' => self::FEED,
-            'catalogue_inactive_at' => now('UTC')->subDays(120),
+            'is_catalogue' => true, 'catalogue_state' => 'withdrawn',
+            'feed_url' => self::FEED, 'catalogue_inactive_at' => null,
         ], $extra));
     }
 
@@ -100,14 +99,14 @@ class CatalogueWithdrawalTest extends TestCase
     {
         $s = $this->idle(89);
         $this->run_();
-        $this->assertTrue((bool) $s->fresh()->is_catalogue);
+        $this->assertSame('active', $s->fresh()->catalogue_state);
     }
 
     public function test_exactement_90_jours_retiree(): void
     {
         $s = $this->idle(90);
         $this->run_();
-        $this->assertFalse((bool) $s->fresh()->is_catalogue);
+        $this->assertSame('withdrawn', $s->fresh()->catalogue_state);
     }
 
     public function test_plus_de_90_jours_retiree_sans_suppression(): void
@@ -117,8 +116,8 @@ class CatalogueWithdrawalTest extends TestCase
         $this->run_();
 
         $fresh = $s->fresh();
-        $this->assertFalse((bool) $fresh->is_catalogue);
-        $this->assertNotNull($fresh->catalogue_inactive_at); // marque « retirée »
+        $this->assertSame('withdrawn', $fresh->catalogue_state);
+        $this->assertNull($fresh->catalogue_inactive_at);     // effacée au retrait M14
         $this->assertNull($fresh->orphaned_at);               // jamais touché
         $this->assertSame(1, Source::count());
         $this->assertSame(2, Article::where('source_id', $s->id)->count());
@@ -129,7 +128,7 @@ class CatalogueWithdrawalTest extends TestCase
         $s = $this->idle(120);
         $this->link($s);
         $this->run_();
-        $this->assertTrue((bool) $s->fresh()->is_catalogue);
+        $this->assertSame('active', $s->fresh()->catalogue_state);
         $this->assertNull($s->fresh()->catalogue_inactive_at); // marqueur périmé corrigé
         $this->assertSame(1, UserSource::count());
     }
@@ -140,13 +139,13 @@ class CatalogueWithdrawalTest extends TestCase
         $v = Veille::factory()->create();
         DB::table('source_veille')->insert(['veille_id' => $v->id, 'source_id' => $s->id, 'user_id' => $v->user_id]);
         $this->run_();
-        $this->assertTrue((bool) $s->fresh()->is_catalogue);
+        $this->assertSame('active', $s->fresh()->catalogue_state);
         $this->assertSame(1, DB::table('source_veille')->count());
     }
 
     public function test_source_privee_jamais_concernee(): void
     {
-        $p = Source::factory()->create(['is_catalogue' => false,
+        $p = Source::factory()->create(['catalogue_state' => 'withdrawn',
             'catalogue_inactive_at' => now('UTC')->subDays(300), 'orphaned_at' => now('UTC')->subDays(10)]);
         $snap = DB::table('sources')->where('id', $p->id)->first();
         $this->run_();
@@ -163,10 +162,10 @@ class CatalogueWithdrawalTest extends TestCase
         app(SourceSubscriptionService::class)->unsubscribe($u, $sub);
         $this->travel(89)->days();
         $this->run_();
-        $this->assertTrue((bool) $s->fresh()->is_catalogue); // nouveau délai : 89 j
+        $this->assertSame('active', $s->fresh()->catalogue_state); // nouveau délai : 89 j
         $this->travel(1)->days();
         $this->run_();
-        $this->assertFalse((bool) $s->fresh()->is_catalogue);
+        $this->assertSame('withdrawn', $s->fresh()->catalogue_state);
     }
 
     // ---- Concurrence (entrelacements déterministes) ----
@@ -179,7 +178,7 @@ class CatalogueWithdrawalTest extends TestCase
         $this->link($s); // abonnement validé par une autre requête
 
         $this->assertFalse($this->svc()->withdrawIfStillInactive($s->id));
-        $this->assertTrue((bool) $s->fresh()->is_catalogue);
+        $this->assertSame('active', $s->fresh()->catalogue_state);
     }
 
     public function test_rattachement_veille_concurrent_conserve(): void
@@ -191,7 +190,7 @@ class CatalogueWithdrawalTest extends TestCase
         app(VeilleService::class)->create($u, ['name' => 'V'], ['ia'], [$s->id]);
 
         $this->assertFalse($this->svc()->withdrawIfStillInactive($s->id));
-        $this->assertTrue((bool) $s->fresh()->is_catalogue);
+        $this->assertSame('active', $s->fresh()->catalogue_state);
     }
 
     public function test_abonnement_apres_retrait_valide_refuse(): void
@@ -206,7 +205,7 @@ class CatalogueWithdrawalTest extends TestCase
             app(SourceSubscriptionService::class)->subscribe(User::factory()->create(), $s);
         } finally {
             $this->assertSame(0, UserSource::count());
-            $this->assertFalse((bool) $s->fresh()->is_catalogue);
+            $this->assertSame('withdrawn', $s->fresh()->catalogue_state);
         }
     }
 
@@ -239,14 +238,8 @@ class CatalogueWithdrawalTest extends TestCase
             $this->fail('refus attendu');
         } catch (\RuntimeException) {
         }
-        try {
-            app(SourceSubscriptionService::class)->addPersonalSource($u, self::FEED);
-            $this->fail('refus attendu');
-        } catch (SourceNotCollectableException) {
-        }
-
-        $this->assertFalse((bool) $s->fresh()->is_catalogue);
-        $this->assertNotNull($s->fresh()->catalogue_inactive_at);
+        $this->assertSame('withdrawn', $s->fresh()->catalogue_state);
+        $this->assertNull($s->fresh()->catalogue_inactive_at); // effacée au retrait M14
         $this->assertSame(0, UserSource::count());
     }
 
@@ -263,7 +256,7 @@ class CatalogueWithdrawalTest extends TestCase
 
         $fresh = $s->fresh();
         $this->assertSame(1, Source::count());              // même enregistrement
-        $this->assertTrue((bool) $fresh->is_catalogue);
+        $this->assertSame('active', $fresh->catalogue_state);
         $this->assertNull($fresh->catalogue_inactive_at);
         $this->assertSame($t1->id, $fresh->theme_id);       // thématique existante conservée
         $this->assertSame(1, UserSource::where('source_id', $s->id)->count());
@@ -279,22 +272,24 @@ class CatalogueWithdrawalTest extends TestCase
             ->postJson(route('sources.confirm'), ['url' => self::FEED, 'theme_id' => SourceTheme::firstOrFail()->id])
             ->assertStatus(422);
 
-        $this->assertFalse((bool) $s->fresh()->is_catalogue);
+        $this->assertSame('withdrawn', $s->fresh()->catalogue_state);
         $this->assertSame(0, UserSource::count());
     }
 
-    public function test_source_privee_historique_jamais_republiee(): void
+    public function test_source_active_deja_suivie_ne_republie_pas(): void
     {
+        // M14 : plus de privée — une source active déjà abonnée est
+        // simplement reconnue (« already_subscribed »), jamais re-publiée.
         $this->seed(SourceThemesSeeder::class);
         $u = User::factory()->create();
-        $s = Source::factory()->create(['is_catalogue' => false, 'feed_url' => self::FEED]);
+        $s = Source::factory()->create(['feed_url' => self::FEED]);
         UserSource::create(['user_id' => $u->id, 'source_id' => $s->id, 'created_at' => now()]);
         $this->fakeHttp([self::okFeed()]);
 
         $this->actingAs($u)->postJson(route('sources.confirm'),
             ['url' => self::FEED, 'theme_id' => SourceTheme::firstOrFail()->id])
             ->assertOk()->assertJsonPath('outcome', 'already_subscribed');
-        $this->assertFalse((bool) $s->fresh()->is_catalogue);
+        $this->assertSame('active', $s->fresh()->catalogue_state);
     }
 
     // ---- updated_at ----
@@ -333,8 +328,8 @@ class CatalogueWithdrawalTest extends TestCase
         $a = $this->idle(120);
         $b = $this->idle(120);
         $this->artisan('catalogue:reconcile-activity', ['--execute' => true, '--source-id' => $a->id])->assertExitCode(0);
-        $this->assertFalse((bool) $a->fresh()->is_catalogue);
-        $this->assertTrue((bool) $b->fresh()->is_catalogue);
+        $this->assertSame('withdrawn', $a->fresh()->catalogue_state);
+        $this->assertSame('active', $b->fresh()->catalogue_state);
     }
 
     // ---- Planification ----
@@ -366,7 +361,7 @@ class CatalogueWithdrawalTest extends TestCase
     {
         $s = $this->idle(120);
         $this->artisan('catalogue:reconcile-activity', ['--execute' => true, '--scheduled' => true])->assertExitCode(2);
-        $this->assertTrue((bool) $s->fresh()->is_catalogue);
+        $this->assertSame('active', $s->fresh()->catalogue_state);
     }
 
     public function test_scheduled_refuse_si_base_differente(): void
@@ -376,7 +371,7 @@ class CatalogueWithdrawalTest extends TestCase
         $this->artisan('catalogue:reconcile-activity', ['--execute' => true, '--scheduled' => true])->assertExitCode(2);
         config(['catalogue.scheduled.database' => '']);
         $this->artisan('catalogue:reconcile-activity', ['--execute' => true, '--scheduled' => true])->assertExitCode(2);
-        $this->assertTrue((bool) $s->fresh()->is_catalogue);
+        $this->assertSame('active', $s->fresh()->catalogue_state);
     }
 
     public function test_scheduled_autorise_si_active_et_base_exacte(): void
@@ -385,7 +380,7 @@ class CatalogueWithdrawalTest extends TestCase
         config(['catalogue.scheduled.enabled' => true,
             'catalogue.scheduled.database' => DB::connection()->getDatabaseName()]);
         $this->artisan('catalogue:reconcile-activity', ['--execute' => true, '--scheduled' => true])->assertExitCode(0);
-        $this->assertFalse((bool) $s->fresh()->is_catalogue);
+        $this->assertSame('withdrawn', $s->fresh()->catalogue_state);
     }
 
     public function test_scheduled_options_incompatibles(): void
