@@ -171,7 +171,6 @@
                                                     Dernière tentative : {{ $subscription->source->last_fetched_at?->format('d/m/Y H:i') ?? '—' }} ·
                                                     Dernier succès : {{ $subscription->source->last_success_at?->format('d/m/Y H:i') ?? '—' }}
                                                 </p>
-
                                                 <form method="POST" action="{{ route('sources.retry', $subscription) }}"
                                                       class="inline">
                                                     @csrf
@@ -182,10 +181,6 @@
                                                     </button>
                                                 </form>
                                                 @if (! $subscription->source->is_active)
-
-                                                @endif
-                                            </div>
-                                                @if (! $subscription->source->is_active)
                                                     <form method="POST" action="{{ route('sources.reactivate', $subscription) }}"
                                                           class="inline">
                                                         @csrf
@@ -195,6 +190,7 @@
                                                         </button>
                                                     </form>
                                                 @endif
+                                            </div>
                                         @endif
                                     </div>
                                     <div class="shrink-0">

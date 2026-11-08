@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\DetectedSourceRequest;
 use App\Http\Requests\StorePersonalSourceRequest;
+use App\Jobs\FetchFeedJob;
 use App\Models\Source;
 use App\Models\UserSource;
 use App\Services\Feed\Detection\SourceNotCollectableException;
@@ -12,7 +13,6 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use App\Jobs\FetchFeedJob;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Gate;
 

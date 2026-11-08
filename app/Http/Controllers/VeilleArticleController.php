@@ -256,6 +256,9 @@ class VeilleArticleController extends Controller
      *
      * @return array{source_id?: int, keyword?: string, page?: int}
      */
+    /**
+     * @return array{source_id?: int, keyword?: string, page?: int, state: string}
+     */
     private static function navParams(Request $request): array
     {
         $raw = $request->query();
