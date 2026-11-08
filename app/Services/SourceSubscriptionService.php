@@ -110,11 +110,12 @@ class SourceSubscriptionService
             if (! $source->wasRecentlyCreated) {
                 // M13.3b — ligne verrouillée : sérialisé avec le retrait.
                 $source = $this->lockSource($source);
-                if ($this->catalogueActivity->isWithdrawn($source)) {
-                    // Retirée du catalogue : le flux vient d'être
-                    // revalidé (détection complète ci-dessus) et la
-                    // thématique est fournie → republication explicite,
-                    // même enregistrement.
+                if ($this->catalogueActivity->isAdoptable($source)) {
+                    // M13.3b/c — source privée SANS AUCUN lien (retirée du
+                    // catalogue ou historique inutilisée) : le flux vient
+                    // d'être revalidé (détection complète ci-dessus) et la
+                    // thématique est fournie → publication explicite,
+                    // même enregistrement. Liens relus sous verrou.
                     $this->catalogueActivity->republish($source, $themeId);
                     $republished = true;
                 } elseif (! $source->is_catalogue
@@ -322,6 +323,9 @@ class SourceSubscriptionService
             ]);
             // M13.3a — lien réapparu : fin d'inactivité catalogue.
             $this->catalogueActivity->reevaluate($source);
+            // M13.3c — réadoption : `orphaned_at` réévalué par la règle
+            // unique M13.1 (remis à NULL dès qu'un lien existe).
+            $this->lifecycle->reevaluate($source);
 
             return $created;
         } catch (QueryException $e) {

@@ -68,6 +68,17 @@ class CatalogueActivityService
     }
 
     /**
+     * Réadoptable (M13.3c) : source privée sans aucun abonnement ni
+     * rattachement — retirée du catalogue ou historique inutilisée.
+     * Liens relus en lecture verrouillante (appel sous verrou source).
+     * Une source privée encore liée n'est JAMAIS réadoptable.
+     */
+    public function isAdoptable(Source $source): bool
+    {
+        return ! $source->is_catalogue && ! $this->hasLinks($source->id, lock: true);
+    }
+
+    /**
      * Valeur attendue de `catalogue_inactive_at` : date existante
      * conservée, `now` si inactive non marquée, NULL si active.
      * Source privée : valeur actuelle inchangée (jamais candidate).

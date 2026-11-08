@@ -14,6 +14,8 @@ use Illuminate\Support\Carbon;
 /**
  * @property Carbon|null $last_fetched_at
  * @property Carbon|null $last_success_at
+ * @property Carbon|null $catalogue_inactive_at
+ * @property Carbon|null $orphaned_at
  * @property int $fail_count
  * @property array<string, mixed>|null $config
  * @property array<string, mixed>|null $detection

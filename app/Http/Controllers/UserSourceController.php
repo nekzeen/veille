@@ -96,7 +96,7 @@ class UserSourceController extends Controller
         // M13.2c — distinguer création / réutilisation / déjà suivie.
         [$outcome, $message] = match (true) {
             $source->wasRecentlyCreated => ['created', "Source « {$source->name} » créée et publiée au catalogue."],
-            $republished => ['republished', "Source « {$source->name} » revalidée et republiée au catalogue — abonnement ajouté."],
+            $republished => ['republished', "Source « {$source->name} » revalidée et publiée au catalogue — abonnement ajouté."],
             $subscription->wasRecentlyCreated => ['reused', "Source « {$source->name} » déjà dans le catalogue — abonnement ajouté."],
             default => ['already_subscribed', "Vous suivez déjà « {$source->name} » — rien de nouveau créé."],
         };
