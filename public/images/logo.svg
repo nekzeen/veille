@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 176 48" width="176" height="48" role="img" aria-label="Veille">
+  <g>
+    <circle cx="24" cy="24" r="18" fill="none" stroke="#243B60" stroke-width="4"
+            stroke-linecap="round" stroke-dasharray="96 17" stroke-dashoffset="-8"
+            transform="rotate(-30 24 24)"/>
+    <path d="M16 17l8 15 8-15" fill="none" stroke="#243B60" stroke-width="4.5"
+          stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="37.5" cy="7" r="3" fill="#7C3AED"/>
+    <circle cx="43.5" cy="14" r="2" fill="#334B75"/>
+  </g>
+  <text x="58" y="33" font-family="Figtree, 'Segoe UI', system-ui, sans-serif"
+        font-size="27" font-weight="600" letter-spacing="-0.5" fill="#243B60">veille</text>
+</svg>
