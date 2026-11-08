@@ -43,7 +43,8 @@
                     </div>
 
                     <div x-show="scope === 'single'" class="flex flex-col sm:flex-row gap-3">
-                        <select name="veille_id" class="rounded-md border-slate-300 text-sm focus:border-violet-500 focus:ring-violet-500">
+                        <select name="veille_id" x-bind:disabled="scope !== 'single'"
+                                class="rounded-md border-slate-300 text-sm focus:border-violet-500 focus:ring-violet-500">
                             <option value="">Choisir une veille…</option>
                             @foreach ($veilles as $v)
                                 <option value="{{ $v->id }}" @selected((string) old('veille_id', $preselect) === (string) $v->id)>{{ $v->name }}</option>
