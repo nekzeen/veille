@@ -104,6 +104,16 @@ class SourceSubscriptionService
                 }
             }
 
+            // M13.2c — source existante NON catalogue (privée, autre
+            // utilisateur ou orpheline) : refus générique — aucune
+            // fuite, jamais d'abonnement implicite à une source privée.
+            if (! $source->is_catalogue
+                && ! $source->userSources()->where('user_id', $user->id)->exists()) {
+                throw new SourceNotCollectableException(
+                    DetectionResult::failure('unavailable', $submittedUrl),
+                );
+            }
+
             // Source existante : jamais d'écrasement de sa configuration.
             return [$source, $this->firstOrCreateSubscription($user, $source), $detection];
         });

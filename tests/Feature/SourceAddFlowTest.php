@@ -3,11 +3,13 @@
 namespace Tests\Feature;
 
 use App\Models\Source;
+use App\Models\SourceTheme;
 use App\Models\User;
 use App\Models\UserSource;
 use App\Services\Feed\FeedClientInterface;
 use App\Services\Feed\IpResolverInterface;
 use App\Services\Feed\SecureFeedClient;
+use Database\Seeders\SourceThemesSeeder;
 use GuzzleHttp\Client;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
@@ -51,7 +53,19 @@ class SourceAddFlowTest extends TestCase
 
     private function confirm(User $user, array $payload): TestResponse
     {
+        // M13.2b — thématique requise à la confirmation : le helper
+        // fournit la première thématique du référentiel.
+        $this->seedOnce();
+        $payload += ['theme_id' => SourceTheme::firstOrFail()->id];
+
         return $this->actingAs($user)->postJson(route('sources.confirm'), $payload);
+    }
+
+    private function seedOnce(): void
+    {
+        if (! SourceTheme::exists()) {
+            $this->seed(SourceThemesSeeder::class);
+        }
     }
 
     public function test_ajout_rss_par_detection_complete(): void
@@ -168,7 +182,10 @@ class SourceAddFlowTest extends TestCase
 
     public function test_source_existante_reutilisee_sans_ecraser_sa_config(): void
     {
+        // M13.2c : seule une source du catalogue est réutilisable par un
+        // autre utilisateur — une privée serait refusée (garde-fou).
         $source = Source::factory()->create([
+            'is_catalogue' => true,
             'feed_url' => 'https://exemple.fr/page',
             'connector' => 'html',
             'config' => ['version' => 1, 'strategy' => 'selectors', 'enrich_pages' => 2, 'selectors' => ['item' => 'article']],

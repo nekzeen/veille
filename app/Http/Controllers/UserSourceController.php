@@ -74,7 +74,7 @@ class UserSourceController extends Controller
         $request->validate(['theme_id' => 'required|integer|exists:source_themes,id']);
 
         try {
-            [$source, , $detection] = $this->service->addDetectedSource(
+            [$source, $subscription, $detection] = $this->service->addDetectedSource(
                 $request->user(),
                 (string) $request->validated('url'),
                 $request->htmlConfig(),
@@ -89,9 +89,18 @@ class UserSourceController extends Controller
             return back()->withInput()->withErrors(['url' => $message]);
         }
 
+        // M13.2c — distinguer création / réutilisation / déjà suivie.
+        [$outcome, $message] = match (true) {
+            $source->wasRecentlyCreated => ['created', "Source « {$source->name} » créée et publiée au catalogue."],
+            $subscription->wasRecentlyCreated => ['reused', "Source « {$source->name} » déjà dans le catalogue — abonnement ajouté."],
+            default => ['already_subscribed', "Vous suivez déjà « {$source->name} » — rien de nouveau créé."],
+        };
+
         if ($request->expectsJson()) {
             return response()->json([
                 'status' => 'ok',
+                'outcome' => $outcome,
+                'message' => $message,
                 'source' => [
                     'id' => $source->id,
                     'name' => $source->name,
@@ -102,7 +111,7 @@ class UserSourceController extends Controller
         }
 
         return redirect()->route('sources.index')
-            ->with('status', "Source « {$source->name} » ajoutée.");
+            ->with('status', $message);
     }
 
     /** Désabonnement : supprime seulement l'abonnement de l'utilisateur. */

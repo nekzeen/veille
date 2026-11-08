@@ -290,7 +290,7 @@
                     this.saving = true; this.error = ''; this.saved = '';
                     try {
                         const data = await this.post('{{ url('/sources/confirm') }}', this.payload());
-                        this.saved = 'Source « ' + data.source.name + ' » ajoutée.';
+                        this.saved = data.message || ('Source « ' + data.source.name + ' » ajoutée.');
                         setTimeout(() => window.location.reload(), 800);
                     } catch (e) {
                         this.error = e.message;

@@ -30,6 +30,9 @@ final class DetectionResult
         'blocked' => 'Source protégée par un dispositif anti-robot : collecte impossible.',
         'unsupported_content_type' => 'Type de contenu non pris en charge.',
         'unrecognized' => 'Aucun format de publication exploitable détecté.',
+        // M13.2c — message volontairement générique : ne révèle pas
+        // l'existence d'une source privée appartenant à un autre utilisateur.
+        'unavailable' => 'Cette URL ne peut pas être ajoutée.',
     ];
 
     /**
