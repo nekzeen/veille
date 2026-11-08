@@ -6,6 +6,7 @@ use Carbon\CarbonInterface;
 use Database\Factories\SourceFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
@@ -42,6 +43,7 @@ class Source extends Model
         'name',
         'site_url',
         'description',
+        'theme_id',
         'is_catalogue',
         'is_active',
         'orphaned_at',
@@ -50,6 +52,7 @@ class Source extends Model
     protected function casts(): array
     {
         return [
+            'theme_id' => 'integer',
             'is_catalogue' => 'boolean',
             'is_active' => 'boolean',
             'orphaned_at' => 'datetime',
@@ -111,5 +114,11 @@ class Source extends Model
     {
         return $this->belongsToMany(Veille::class, 'source_veille')
             ->withPivot('user_id');
+    }
+
+    /** @return BelongsTo<SourceTheme, $this> */
+    public function theme(): BelongsTo
+    {
+        return $this->belongsTo(SourceTheme::class, 'theme_id');
     }
 }
