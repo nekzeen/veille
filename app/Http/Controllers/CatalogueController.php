@@ -18,6 +18,7 @@ class CatalogueController extends Controller
 
         $sources = Source::query()
             ->where('is_catalogue', true)
+            ->where('catalogue_state', 'active')
             ->where('is_active', true)
             ->with('theme:id,name')
             ->when($themeId > 0, fn ($q) => $q->where('theme_id', $themeId))

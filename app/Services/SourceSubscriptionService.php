@@ -79,6 +79,7 @@ class SourceSubscriptionService
                     'site_url' => $detection->parsed?->siteUrl,
                     'theme_id' => $themeId,
                     'is_catalogue' => true,
+                    'catalogue_state' => 'active',
                     'created_at' => now('UTC'),
                     'updated_at' => now('UTC'),
                 ];
@@ -110,21 +111,13 @@ class SourceSubscriptionService
             if (! $source->wasRecentlyCreated) {
                 // M13.3b — ligne verrouillée : sérialisé avec le retrait.
                 $source = $this->lockSource($source);
-                if ($this->catalogueActivity->isAdoptable($source)) {
-                    // M13.3b/c — source privée SANS AUCUN lien (retirée du
-                    // catalogue ou historique inutilisée) : le flux vient
-                    // d'être revalidé (détection complète ci-dessus) et la
-                    // thématique est fournie → publication explicite,
-                    // même enregistrement. Liens relus sous verrou.
+                if ($this->catalogueActivity->isWithdrawn($source)) {
+                    // M14 — source commune retirée : le flux vient d'être
+                    // revalidé (détection complète ci-dessus) et la
+                    // thématique est fournie → réactivation explicite,
+                    // même enregistrement. Plus aucune source privée.
                     $this->catalogueActivity->republish($source, $themeId);
                     $republished = true;
-                } elseif (! $source->is_catalogue
-                    && ! $source->userSources()->where('user_id', $user->id)->exists()) {
-                    // M13.2c — source privée (autre utilisateur ou
-                    // orpheline) : refus générique, aucune fuite.
-                    throw new SourceNotCollectableException(
-                        DetectionResult::failure('unavailable', $submittedUrl),
-                    );
                 }
             }
 
@@ -186,76 +179,11 @@ class SourceSubscriptionService
         // source retirée n'est jamais republiée par cette voie.
         return DB::transaction(function () use ($user, $source): UserSource {
             $locked = $this->lockSource($source);
-            if (! $locked->is_catalogue
-                && ! $locked->userSources()->where('user_id', $user->id)->exists()) {
+            if ($this->catalogueActivity->isWithdrawn($locked)) {
                 throw new \RuntimeException('Source non accessible.');
             }
 
             return $this->firstOrCreateSubscription($user, $locked);
-        });
-    }
-
-    /**
-     * Ajout d'une source personnelle par URL : réutilise la source technique
-     * existante ou la crée (is_catalogue = false), puis crée l'abonnement.
-     *
-     * @return array{0: Source, 1: UserSource}
-     */
-    public function addPersonalSource(User $user, string $feedUrl): array
-    {
-        $normalized = self::normalizeFeedUrl($feedUrl);
-
-        return DB::transaction(function () use ($user, $normalized): array {
-            $source = Source::where('feed_url', $normalized)->first();
-
-            if ($source === null) {
-                try {
-                    $attributes = [
-                        'feed_url' => $normalized,
-                        'name' => parse_url($normalized, PHP_URL_HOST) ?: $normalized,
-                        'is_catalogue' => false,
-                        'created_at' => now('UTC'),
-                        'updated_at' => now('UTC'),
-                    ];
-                    // Garde temporaire : colonnes M8 absentes tant que la
-                    // migration n'est pas appliqu�e en production.
-                    if (Schema::hasColumn('sources', 'connector')) {
-                        $attributes += [
-                            'submitted_url' => $normalized,
-                            'fetch_url' => $normalized,
-                            'connector' => 'rss',
-                            'config_state' => 'validated',
-                        ];
-                    }
-                    $source = Source::create($attributes);
-                } catch (QueryException $e) {
-                    // Seule une violation UNIQUE (23000/1062) est un doublon
-                    // concurrent : relire l'existant. Toute autre erreur SQL
-                    // est relancée telle quelle, jamais masquée.
-                    if (! self::isUniqueViolation($e)) {
-                        throw $e;
-                    }
-                    $source = Source::where('feed_url', $normalized)->first();
-                    if ($source === null) {
-                        throw $e;
-                    }
-                }
-            }
-
-            if (! $source->wasRecentlyCreated) {
-                // M13.3b — même règle que M13.2c, sous verrou : jamais
-                // d'abonnement implicite à une source privée d'autrui
-                // ni à une source retirée (pas de republication ici).
-                $source = $this->lockSource($source);
-                if (! $source->is_catalogue
-                    && ! $source->userSources()->where('user_id', $user->id)->exists()) {
-                    throw new SourceNotCollectableException(
-                        DetectionResult::failure('unavailable', $normalized),
-                    );
-                }
-            }
-
-            return [$source, $this->firstOrCreateSubscription($user, $source)];
         });
     }
 

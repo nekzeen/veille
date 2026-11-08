@@ -16,6 +16,7 @@ class StorePersonalSourceRequest extends FormRequest
     {
         return [
             'feed_url' => ['required', 'string', 'max:512', 'url:http,https'],
+            'theme_id' => ['required', 'integer', 'exists:source_themes,id'],
         ];
     }
 }

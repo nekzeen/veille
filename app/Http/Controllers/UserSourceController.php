@@ -50,20 +50,32 @@ class UserSourceController extends Controller
         return back()->with('status', 'Abonnement ajouté.');
     }
 
-    /** Ajout d'une source personnelle par URL de flux. */
+    /**
+     * M14 — ajout par URL de flux : plus de création privée directe ;
+     * l'URL est soumise à la détection/validation complète
+     * (SecureFeedClient + SourceDetector) puis publiée au catalogue
+     * avec la thématique obligatoire.
+     */
     public function storePersonal(StorePersonalSourceRequest $request): RedirectResponse
     {
         try {
-            [$source] = $this->service->addPersonalSource(
+            [$source, , , $republished] = $this->service->addDetectedSource(
                 $request->user(),
                 (string) $request->validated('feed_url'),
+                null,
+                (int) $request->validated('theme_id'),
             );
         } catch (SourceNotCollectableException $e) {
             return back()->withInput()->withErrors(['feed_url' => $e->getMessage()]);
         }
 
-        return redirect()->route('sources.index')
-            ->with('status', "Source « {$source->name} » ajoutée.");
+        $message = match (true) {
+            $source->wasRecentlyCreated => "Source « {$source->name} » créée et publiée au catalogue.",
+            $republished => "Source « {$source->name} » revalidée et réactivée — abonnement ajouté.",
+            default => "Source « {$source->name} » déjà dans le catalogue — abonnement ajouté.",
+        };
+
+        return redirect()->route('sources.index')->with('status', $message);
     }
 
     /**

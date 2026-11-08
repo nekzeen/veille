@@ -147,7 +147,15 @@
                                 placeholder="https://exemple.fr/feed.xml" class="w-full" required />
                             <x-input-error :messages="$errors->get('feed_url')" class="mt-2" />
                         </div>
+                        <select name="theme_id" required
+                            class="border-gray-300 rounded-md shadow-sm text-sm">
+                            <option value="">Thématique…</option>
+                            @foreach ($themes as $theme)
+                                <option value="{{ $theme->id }}">{{ $theme->name }}</option>
+                            @endforeach
+                        </select>
                         <x-primary-button type="submit">Ajouter</x-primary-button>
+                        <x-input-error :messages="$errors->get('theme_id')" class="mt-2" />
                     </form>
                 </div>
             </div>
