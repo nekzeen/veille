@@ -15,6 +15,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $last_fetched_at
  * @property Carbon|null $last_success_at
  * @property Carbon|null $catalogue_inactive_at
+ * @property string $catalogue_state
  * @property Carbon|null $orphaned_at
  * @property int $fail_count
  * @property array<string, mixed>|null $config
@@ -47,6 +48,7 @@ class Source extends Model
         'description',
         'theme_id',
         'is_catalogue',
+        'catalogue_state',
         'is_active',
         'orphaned_at',
         'catalogue_inactive_at',
@@ -57,6 +59,7 @@ class Source extends Model
         return [
             'theme_id' => 'integer',
             'is_catalogue' => 'boolean',
+            'catalogue_state' => 'string',
             'is_active' => 'boolean',
             'orphaned_at' => 'datetime',
             'catalogue_inactive_at' => 'datetime',

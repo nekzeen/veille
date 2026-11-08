@@ -9,26 +9,26 @@ use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 
 /**
- * M13.3a/b — suivi d'inactivité et retrait des sources du catalogue.
+ * M14 — suivi d'inactivité et retrait des sources du catalogue commun.
  *
- * Règle unique : une source catalogue est inactive ssi elle n'a plus
- * aucun abonnement (`user_sources`) ET plus aucun rattachement
- * (`source_veille`) — deux critères indépendants, existence seule
- * (aucun comptage d'utilisateurs). L'activité technique (collecte,
- * erreurs) et éditoriale (articles) n'intervient pas.
+ * Toutes les sources sont communes (`is_catalogue` toujours vrai) ;
+ * l'état de publication est `catalogue_state` : 'active' (proposée
+ * dans le catalogue) ou 'withdrawn' (retirée, toujours commune —
+ * jamais une source privée). `orphaned_at` est dormante (M14.1).
  *
- * `catalogue_inactive_at` posé seulement si NULL (début de la période
- * continue conservé) ; remis à NULL dès qu'un lien réapparaît.
- * Retrait (M13.3b) : après WITHDRAWAL_DAYS jours continus, seul
- * `is_catalogue` passe à false ; `catalogue_inactive_at` est conservé
- * et identifie la source comme « retirée » (une source privée
- * historique a toujours NULL). Republication uniquement via
- * `republish()`, après revalidation complète du flux.
+ * Inactivité : source 'active' sans aucun abonnement (`user_sources`)
+ * ET aucun rattachement (`source_veille`) — critères indépendants,
+ * existence seule. `catalogue_inactive_at` posé si NULL, remis à NULL
+ * dès qu'un lien réapparaît ou dès que la source quitte 'active'.
+ *
+ * Retrait : après WITHDRAWAL_DAYS jours continus, `catalogue_state`
+ * passe à 'withdrawn' et le marqueur est effacé — `is_catalogue` reste
+ * vrai, les liens et données sont conservés. Réactivation uniquement
+ * via `republish()` après revalidation complète du flux.
  *
  * Sérialisation : retrait et abonnements verrouillent la même ligne
  * `sources` (FOR UPDATE) ; les liens sont relus sous verrou.
- * `orphaned_at` et `updated_at` ne sont jamais modifiés ici. Aucune
- * suppression — jamais.
+ * `orphaned_at` et `updated_at` ne sont jamais modifiés ici.
  */
 class CatalogueActivityService
 {
@@ -55,38 +55,29 @@ class CatalogueActivityService
             });
     }
 
-    /** Vrai ssi source catalogue sans aucun lien utilisateur. */
+    /** Vrai ssi source active au catalogue sans aucun lien utilisateur. */
     public function isInactive(Source $source): bool
     {
-        return (bool) $source->is_catalogue && ! $this->hasLinks($source->id);
+        return (bool) $source->is_catalogue
+            && $source->catalogue_state === 'active'
+            && ! $this->hasLinks($source->id);
     }
 
-    /** Source retirée du catalogue (M13.3b) — jamais une privée historique. */
+    /** Retirée du catalogue actif : commune, réactivable après revalidation. */
     public function isWithdrawn(Source $source): bool
     {
-        return ! $source->is_catalogue && $source->catalogue_inactive_at !== null;
-    }
-
-    /**
-     * Réadoptable (M13.3c) : source privée sans aucun abonnement ni
-     * rattachement — retirée du catalogue ou historique inutilisée.
-     * Liens relus en lecture verrouillante (appel sous verrou source).
-     * Une source privée encore liée n'est JAMAIS réadoptable.
-     */
-    public function isAdoptable(Source $source): bool
-    {
-        return ! $source->is_catalogue && ! $this->hasLinks($source->id, lock: true);
+        return $source->catalogue_state === 'withdrawn';
     }
 
     /**
      * Valeur attendue de `catalogue_inactive_at` : date existante
-     * conservée, `now` si inactive non marquée, NULL si active.
-     * Source privée : valeur actuelle inchangée (jamais candidate).
+     * conservée, `now` si inactive non marquée, NULL si active,
+     * retirée ou hors catalogue.
      */
     public function expectedInactiveAt(Source $source): mixed
     {
-        if (! $source->is_catalogue) {
-            return $source->catalogue_inactive_at;
+        if (! $source->is_catalogue || $source->catalogue_state !== 'active') {
+            return null;
         }
         if (! $this->isInactive($source)) {
             return null;
@@ -102,7 +93,7 @@ class CatalogueActivityService
     }
 
     /**
-     * Candidates au retrait (lecture seule) : catalogue, marquées
+     * Candidates au retrait (lecture seule) : actives, marquées
      * avant la date limite, sans aucun lien. La décision finale est
      * reprise sous verrou par withdrawIfStillInactive().
      *
@@ -112,6 +103,7 @@ class CatalogueActivityService
     {
         return Source::query()
             ->where('is_catalogue', true)
+            ->where('catalogue_state', 'active')
             ->whereNotNull('catalogue_inactive_at')
             ->where('catalogue_inactive_at', '<=', $this->cutoff())
             ->whereNotExists(fn ($q) => $q->from('user_sources')->whereColumn('user_sources.source_id', 'sources.id'))
@@ -124,8 +116,9 @@ class CatalogueActivityService
 
     /**
      * Retrait sous verrou : ligne source verrouillée FOR UPDATE, puis
-     * revérification complète (catalogue, délai, liens relus en
-     * lecture verrouillante). Seul `is_catalogue` passe à false.
+     * revérification complète (active, délai, liens relus en lecture
+     * verrouillante). Seul `catalogue_state` bascule à 'withdrawn' ;
+     * `is_catalogue` reste vrai, `orphaned_at` jamais écrit.
      */
     public function withdrawIfStillInactive(int $sourceId): bool
     {
@@ -133,27 +126,29 @@ class CatalogueActivityService
             $source = Source::whereKey($sourceId)->lockForUpdate()->first();
             if ($source === null
                 || ! $source->is_catalogue
+                || $source->catalogue_state !== 'active'
                 || $source->catalogue_inactive_at === null
                 || $source->catalogue_inactive_at->greaterThan($this->cutoff())
                 || $this->hasLinks($sourceId, lock: true)) {
                 return false;
             }
 
-            DB::table('sources')->where('id', $sourceId)->update(['is_catalogue' => false]);
+            DB::table('sources')->where('id', $sourceId)
+                ->update(['catalogue_state' => 'withdrawn', 'catalogue_inactive_at' => null]);
 
             return true;
         });
     }
 
     /**
-     * Republication explicite (M13.3b) — à appeler UNIQUEMENT après
+     * Réactivation explicite (M14) — à appeler UNIQUEMENT après
      * revalidation complète du flux (SourceDetector/SecureFeedClient)
      * et sur une ligne déjà verrouillée. Même enregistrement ;
      * thématique existante conservée, sinon thématique fournie.
      */
     public function republish(Source $source, int $themeId): void
     {
-        $attributes = ['is_catalogue' => true, 'catalogue_inactive_at' => null];
+        $attributes = ['is_catalogue' => true, 'catalogue_state' => 'active', 'catalogue_inactive_at' => null];
         if ($source->theme_id === null) {
             $attributes['theme_id'] = $themeId;
         }
