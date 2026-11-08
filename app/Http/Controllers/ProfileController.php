@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\ProfileUpdateRequest;
+use App\Services\CatalogueActivityService;
 use App\Services\SourceLifecycleService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -62,6 +63,7 @@ class ProfileController extends Controller
             DB::table('sessions')->where('user_id', $user->id)->delete();
             $user->delete();
             app(SourceLifecycleService::class)->reevaluate($sourceIds);
+            app(CatalogueActivityService::class)->reevaluate($sourceIds);
         });
 
         $request->session()->invalidate();

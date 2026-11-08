@@ -146,6 +146,9 @@ final class VeilleService
             $attach[] = $sourceId;
         }
 
+        $before = $veille->sources()->pluck('sources.id')->all();
         $veille->sources()->sync($attach);
+        // M13.3a — rattachements ajoutés/retirés : réévaluer l'activité.
+        app(CatalogueActivityService::class)->reevaluate(array_merge($before, $attach));
     }
 }

@@ -47,6 +47,7 @@ class Source extends Model
         'is_catalogue',
         'is_active',
         'orphaned_at',
+        'catalogue_inactive_at',
     ];
 
     protected function casts(): array
@@ -56,6 +57,7 @@ class Source extends Model
             'is_catalogue' => 'boolean',
             'is_active' => 'boolean',
             'orphaned_at' => 'datetime',
+            'catalogue_inactive_at' => 'datetime',
             'last_fetched_at' => 'datetime',
             'last_success_at' => 'datetime',
             'fail_count' => 'integer',

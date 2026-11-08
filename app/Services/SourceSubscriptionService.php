@@ -18,6 +18,7 @@ class SourceSubscriptionService
     public function __construct(
         private readonly SourceDetector $detector,
         private readonly SourceLifecycleService $lifecycle,
+        private readonly CatalogueActivityService $catalogueActivity,
     ) {}
 
     /**
@@ -249,6 +250,8 @@ class SourceSubscriptionService
             $subscription->delete();
 
             $this->refreshOrphanFlag($source);
+            // M13.3a — dernier lien retiré : début d'inactivité catalogue.
+            $this->catalogueActivity->reevaluate($sourceId);
         });
     }
 
@@ -274,11 +277,15 @@ class SourceSubscriptionService
         }
 
         try {
-            return UserSource::create([
+            $created = UserSource::create([
                 'user_id' => $user->id,
                 'source_id' => $source->id,
                 'created_at' => now('UTC'),
             ]);
+            // M13.3a — lien réapparu : fin d'inactivité catalogue.
+            $this->catalogueActivity->reevaluate($source);
+
+            return $created;
         } catch (QueryException $e) {
             if (! self::isUniqueViolation($e)) {
                 throw $e;

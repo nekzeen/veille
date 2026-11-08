@@ -8,6 +8,7 @@ use App\Models\Source;
 use App\Models\User;
 use App\Models\UserSource;
 use App\Models\Veille;
+use App\Services\CatalogueActivityService;
 use App\Services\SourceLifecycleService;
 use App\Services\VeilleService;
 use Illuminate\Contracts\View\View;
@@ -104,6 +105,7 @@ class VeilleController extends Controller
         $sourceIds = $this->lifecycle->sourceIdsForVeille($veille->id);
         $this->veilles->delete($veille);
         $this->lifecycle->reevaluate($sourceIds);
+        app(CatalogueActivityService::class)->reevaluate($sourceIds);
 
         return redirect()->route('veilles.index')
             ->with('status', "Veille « {$veille->name} » supprimée.");
