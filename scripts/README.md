@@ -4,6 +4,9 @@
 `private/backups/veille-auto/` (répertoire dédié ; les sauvegardes
 manuelles `backups/veille/*` ne sont JAMAIS supprimées).
 
+> ⚠ M12.8.1 — les ~10 sauvegardes manuelles de `backups/veille/` sont
+> une exception temporaire validée : aucune suppression automatique,
+> durée indéfinie en attente de réexamen — voir `Backup_Restore.md`.
 
 ## Planification ISPConfig (à saisir manuellement)
 

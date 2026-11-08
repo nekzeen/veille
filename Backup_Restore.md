@@ -203,3 +203,20 @@ dump de l'état post-migration conseillé ✓.
 - `--single-transaction` ne protège pas contre les DDL concurrents.
 - `veille_db` devient non reproductible dès le premier utilisateur
   créé — le dump pré-migration est le seul point de retour garanti.
+
+## Exception — sauvegardes manuelles historiques (M12.8.1)
+
+Deux catégories distinctes :
+
+1. **Automatiques** (`private/backups/veille-auto/`) : quotidiennes,
+   rétention glissante de **7 jours maximum**, supprimées par
+   `scripts/backup-veille.sh` — politique cible.
+2. **Manuelles historiques** (`private/backups/veille/`, ~10
+   répertoires antérieurs au mécanisme) : **exception temporaire** —
+   conservation autorisée par décision de l'utilisateur, **aucune
+   suppression automatique**, **aucune date de purge définie** à ce
+   stade.
+
+Cette durée indéfinie des sauvegardes manuelles est un **point ouvert**
+à résoudre avant la publication définitive de `/privacy` (la durée de
+conservation des sauvegardes devra y être exacte). Réexamen requis.
