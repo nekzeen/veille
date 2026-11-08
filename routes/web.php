@@ -18,7 +18,7 @@ use App\Http\Middleware\ResolveShareToken;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
-    return view('welcome');
+    return auth()->check() ? redirect('/dashboard') : redirect('/login');
 });
 
 // Pages légales publiques (M12.15) — version affichée, contenu provisoire.
