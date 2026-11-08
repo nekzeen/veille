@@ -21,6 +21,26 @@ use SimplePie\SimplePie;
  */
 final class SimplePieFeedParser implements FeedParserInterface
 {
+    private bool $lastRecovered = false;
+
+    /** Vrai si le dernier parse a réussi après réparation XML (M12.17). */
+    public function lastRecovered(): bool
+    {
+        return $this->lastRecovered;
+    }
+
+    private function buildPie(string $xml): SimplePie
+    {
+        $pie = new SimplePie;
+        $pie->enable_cache(false);
+        // Ordre du document conservé — le tri chronologique est une
+        // affaire d'affichage, pas du parseur d'un collecteur.
+        $pie->enable_order_by_date(false);
+        $pie->set_raw_data($xml);
+
+        return $pie;
+    }
+
     public function parse(string $xml): ParsedFeed
     {
         $xml = ltrim($xml);
@@ -31,15 +51,25 @@ final class SimplePieFeedParser implements FeedParserInterface
             throw new FeedParseException('Document XML vide.');
         }
 
-        $pie = new SimplePie;
-        $pie->enable_cache(false);
-        // Ordre du document conservé — le tri chronologique est une
-        // affaire d'affichage, pas du parseur d'un collecteur.
-        $pie->enable_order_by_date(false);
-        $pie->set_raw_data($xml);
+        $this->lastRecovered = false;
+        $pie = $this->buildPie($xml);
 
         if (! $pie->init()) {
-            throw new FeedParseException('Document XML non exploitable : '.$this->simplePieError($pie));
+            // M12.17 — seconde passe conservative : uniquement si le
+            // contenu brut présente des défauts sûrs à retirer (UTF-8
+            // illégal / caractères interdits XML 1.0). Jamais de
+            // reformatage ni de suppression de balises.
+            $firstError = $this->simplePieError($pie);
+            $repaired = XmlFeedRepair::repair($xml);
+            if ($repaired === null) {
+                throw new FeedParseException('Document XML non exploitable : '.$firstError);
+            }
+            $pie = $this->buildPie($repaired);
+            if (! $pie->init()) {
+                throw new FeedParseException('Document XML non exploitable : '.$firstError.' [réparation tentée, toujours illisible]');
+            }
+            $this->lastRecovered = true;
+            $xml = $repaired;
         }
 
         $format = FeedFormat::fromSimplePieType($pie->get_type());
