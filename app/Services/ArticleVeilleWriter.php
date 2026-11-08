@@ -115,8 +115,21 @@ final class ArticleVeilleWriter
         return DB::transaction(function () use ($veille, $articleIds): int {
             $this->lockVeille($veille->id);
 
-            return ArticleVeille::where('veille_id', $veille->id)
+            $deleted = ArticleVeille::where('veille_id', $veille->id)
                 ->whereIn('article_id', $articleIds)->delete();
+
+            // M12.21 — dater atomiquement le dernier détachement :
+            // les articles qui n'ont plus AUCUNE association reçoivent
+            // leur last_detached_at maintenant (grâce 7 j de M12.11).
+            if ($deleted > 0) {
+                DB::table('articles')
+                    ->whereIn('id', $articleIds)
+                    ->whereNotExists(fn ($q) => $q->selectRaw(1)->from('article_veille')
+                        ->whereColumn('article_veille.article_id', 'articles.id'))
+                    ->update(['last_detached_at' => now('UTC')]);
+            }
+
+            return $deleted;
         });
     }
 }

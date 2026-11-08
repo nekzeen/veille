@@ -138,7 +138,17 @@
                                                 {{ ($favMap[$article->id] ?? false) ? 'Retirer le favori' : 'Ajouter aux favoris' }}
                                             </button>
                                         </form>
-
+                                        · <form method="POST"
+                                                action="{{ route('veilles.articles.detach', [$veille, $article]) }}"
+                                                class="inline"
+                                                onsubmit="return confirm('Retirer cet article de cette veille ? Vos notes, favoris et états de lecture sont conservés.');">
+                                            @csrf
+                                            @method('DELETE')
+                                            @foreach ($params as $name => $value)
+                                                <input type="hidden" name="{{ $name }}" value="{{ $value }}">
+                                            @endforeach
+                                            <button type="submit" class="text-xs text-red-600 hover:underline">Retirer de cette veille</button>
+                                        </form>
                                     </p>
                                     @if ($article->summary !== null && $article->summary !== '')
                                         <p class="mt-1 text-sm text-gray-600">{{ Str::limit(strip_tags($article->summary), 200) }}</p>

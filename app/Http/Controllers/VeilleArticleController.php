@@ -12,6 +12,7 @@ use App\Services\Articles\ArticleNoteState;
 use App\Services\Articles\ArticleReadState;
 use App\Services\Articles\HtmlContentSanitizer;
 use App\Services\Articles\VeilleArticleQuery;
+use App\Services\ArticleVeilleWriter;
 use Closure;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -35,6 +36,7 @@ class VeilleArticleController extends Controller
         private readonly ArticleNoteState $noteStates,
         private readonly ArticleArchiveState $archiveStates,
         private readonly ArticleCategoryState $categoryStates,
+        private readonly ArticleVeilleWriter $veilleWriter,
     ) {}
 
     public function index(Request $request, Veille $veille): View
@@ -126,6 +128,21 @@ class VeilleArticleController extends Controller
         return redirect()
             ->route('veilles.articles.index', [$veille, 'state' => 'unread'])
             ->with('status', $count.' article(s) marqué(s) comme lu(s) — changement global pour votre compte.');
+    }
+
+    /**
+     * M12.21 — retire l'article de CETTE veille uniquement : suppression
+     * de la seule association article_veille via ArticleVeilleWriter
+     * (verrou + last_detached_at atomique). L'article partagé et les
+     * états personnels (favori, note, archive, lecture) sont conservés.
+     */
+    public function detach(Request $request, Veille $veille, Article $article): RedirectResponse
+    {
+        Gate::authorize('view', $veille);
+
+        $this->veilleWriter->deleteFor($veille, [$article->id]);
+
+        return back()->with('status', 'Article retiré de cette veille.');
     }
 
     /** Marquer non lu — DELETE. Ligne supprimée si rien d'autre à conserver. */

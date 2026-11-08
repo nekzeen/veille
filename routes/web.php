@@ -80,6 +80,8 @@ Route::middleware('auth')->group(function () {
             ->name('veilles.articles.read-all');
         Route::put('/veilles/{veille}/articles/{article}/read', [VeilleArticleController::class, 'markRead'])
             ->name('veilles.articles.read');
+        Route::delete('/veilles/{veille}/articles/{article}', [VeilleArticleController::class, 'detach'])
+            ->name('veilles.articles.detach');
         Route::delete('/veilles/{veille}/articles/{article}/read', [VeilleArticleController::class, 'markUnread'])
             ->name('veilles.articles.unread');
         Route::put('/veilles/{veille}/articles/{article}/favorite', [VeilleArticleController::class, 'markFavorite'])
