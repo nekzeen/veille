@@ -130,7 +130,10 @@ final class VeilleService
      */
     private function syncSources(User $user, Veille $veille, array $sourceIds): void
     {
-        $sources = Source::whereIn('id', $sourceIds)->get()->keyBy('id');
+        // M13.3b — lignes verrouillées (ordre d'id, sans interblocage) :
+        // sérialisé avec un retrait du catalogue concurrent.
+        $sources = Source::whereIn('id', $sourceIds)->orderBy('id')
+            ->lockForUpdate()->get()->keyBy('id');
         $subscribed = $user->userSources()
             ->whereIn('source_id', $sourceIds)->pluck('source_id')->flip();
 

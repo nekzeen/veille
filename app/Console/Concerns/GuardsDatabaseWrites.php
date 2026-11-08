@@ -53,4 +53,27 @@ trait GuardsDatabaseWrites
 
         return true;
     }
+
+    /**
+     * Exécution planifiée (M13.3b) : jamais de --force ni de saisie ;
+     * autorisée seulement si la configuration l'active explicitement
+     * ET désigne exactement la base réellement connectée.
+     */
+    protected function scheduledWriteAllowed(): bool
+    {
+        $db = (string) DB::connection()->getDatabaseName();
+        $allowed = (string) config('catalogue.scheduled.database', '');
+        if (config('catalogue.scheduled.enabled') !== true) {
+            $this->error('--scheduled refusé : exécution planifiée désactivée (CATALOGUE_SCHEDULED_EXECUTE).');
+
+            return false;
+        }
+        if ($db === '' || $allowed === '' || $db !== $allowed) {
+            $this->error("--scheduled refusé : base connectée « $db » différente de la base autorisée.");
+
+            return false;
+        }
+
+        return true;
+    }
 }

@@ -5,10 +5,11 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Models\Source;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 
 /**
- * M13.3a — suivi d'inactivité des sources du catalogue commun.
+ * M13.3a/b — suivi d'inactivité et retrait des sources du catalogue.
  *
  * Règle unique : une source catalogue est inactive ssi elle n'a plus
  * aucun abonnement (`user_sources`) ET plus aucun rattachement
@@ -18,11 +19,21 @@ use Illuminate\Support\Facades\DB;
  *
  * `catalogue_inactive_at` posé seulement si NULL (début de la période
  * continue conservé) ; remis à NULL dès qu'un lien réapparaît.
- * Les sources privées ne sont jamais écrites. `orphaned_at` n'est
- * jamais lu ni modifié ici. Aucune suppression — jamais.
+ * Retrait (M13.3b) : après WITHDRAWAL_DAYS jours continus, seul
+ * `is_catalogue` passe à false ; `catalogue_inactive_at` est conservé
+ * et identifie la source comme « retirée » (une source privée
+ * historique a toujours NULL). Republication uniquement via
+ * `republish()`, après revalidation complète du flux.
+ *
+ * Sérialisation : retrait et abonnements verrouillent la même ligne
+ * `sources` (FOR UPDATE) ; les liens sont relus sous verrou.
+ * `orphaned_at` et `updated_at` ne sont jamais modifiés ici. Aucune
+ * suppression — jamais.
  */
 class CatalogueActivityService
 {
+    public const WITHDRAWAL_DAYS = 90;
+
     /** @param  iterable<Source|int>|Source|int  $sources */
     public function reevaluate(iterable|Source|int $sources): void
     {
@@ -38,7 +49,8 @@ class CatalogueActivityService
             ->each(function (Source $source): void {
                 $target = $this->expectedInactiveAt($source);
                 if ($target !== $source->catalogue_inactive_at) {
-                    $source->forceFill(['catalogue_inactive_at' => $target])->saveQuietly();
+                    DB::table('sources')->where('id', $source->id)
+                        ->update(['catalogue_inactive_at' => $target]);
                 }
             });
     }
@@ -46,9 +58,13 @@ class CatalogueActivityService
     /** Vrai ssi source catalogue sans aucun lien utilisateur. */
     public function isInactive(Source $source): bool
     {
-        return (bool) $source->is_catalogue
-            && ! DB::table('user_sources')->where('source_id', $source->id)->exists()
-            && ! DB::table('source_veille')->where('source_id', $source->id)->exists();
+        return (bool) $source->is_catalogue && ! $this->hasLinks($source->id);
+    }
+
+    /** Source retirée du catalogue (M13.3b) — jamais une privée historique. */
+    public function isWithdrawn(Source $source): bool
+    {
+        return ! $source->is_catalogue && $source->catalogue_inactive_at !== null;
     }
 
     /**
@@ -66,5 +82,83 @@ class CatalogueActivityService
         }
 
         return $source->catalogue_inactive_at ?? now('UTC');
+    }
+
+    /** Date limite : inactive depuis au moins WITHDRAWAL_DAYS jours. */
+    public function cutoff(): CarbonInterface
+    {
+        return now('UTC')->subDays(self::WITHDRAWAL_DAYS);
+    }
+
+    /**
+     * Candidates au retrait (lecture seule) : catalogue, marquées
+     * avant la date limite, sans aucun lien. La décision finale est
+     * reprise sous verrou par withdrawIfStillInactive().
+     *
+     * @return list<int>
+     */
+    public function withdrawalCandidateIds(?int $sourceId = null, ?int $limit = null): array
+    {
+        return Source::query()
+            ->where('is_catalogue', true)
+            ->whereNotNull('catalogue_inactive_at')
+            ->where('catalogue_inactive_at', '<=', $this->cutoff())
+            ->whereNotExists(fn ($q) => $q->from('user_sources')->whereColumn('user_sources.source_id', 'sources.id'))
+            ->whereNotExists(fn ($q) => $q->from('source_veille')->whereColumn('source_veille.source_id', 'sources.id'))
+            ->when($sourceId !== null, fn ($q) => $q->where('id', $sourceId))
+            ->orderBy('id')
+            ->when($limit !== null, fn ($q) => $q->limit(max(0, (int) $limit)))
+            ->pluck('id')->map(fn ($id) => (int) $id)->all();
+    }
+
+    /**
+     * Retrait sous verrou : ligne source verrouillée FOR UPDATE, puis
+     * revérification complète (catalogue, délai, liens relus en
+     * lecture verrouillante). Seul `is_catalogue` passe à false.
+     */
+    public function withdrawIfStillInactive(int $sourceId): bool
+    {
+        return DB::transaction(function () use ($sourceId): bool {
+            $source = Source::whereKey($sourceId)->lockForUpdate()->first();
+            if ($source === null
+                || ! $source->is_catalogue
+                || $source->catalogue_inactive_at === null
+                || $source->catalogue_inactive_at->greaterThan($this->cutoff())
+                || $this->hasLinks($sourceId, lock: true)) {
+                return false;
+            }
+
+            DB::table('sources')->where('id', $sourceId)->update(['is_catalogue' => false]);
+
+            return true;
+        });
+    }
+
+    /**
+     * Republication explicite (M13.3b) — à appeler UNIQUEMENT après
+     * revalidation complète du flux (SourceDetector/SecureFeedClient)
+     * et sur une ligne déjà verrouillée. Même enregistrement ;
+     * thématique existante conservée, sinon thématique fournie.
+     */
+    public function republish(Source $source, int $themeId): void
+    {
+        $attributes = ['is_catalogue' => true, 'catalogue_inactive_at' => null];
+        if ($source->theme_id === null) {
+            $attributes['theme_id'] = $themeId;
+        }
+        DB::table('sources')->where('id', $source->id)->update($attributes);
+        $source->forceFill($attributes)->syncOriginal();
+    }
+
+    private function hasLinks(int $sourceId, bool $lock = false): bool
+    {
+        $subs = DB::table('user_sources')->where('source_id', $sourceId);
+        $veilles = DB::table('source_veille')->where('source_id', $sourceId);
+        if ($lock) {
+            $subs->sharedLock();
+            $veilles->sharedLock();
+        }
+
+        return $subs->exists() || $veilles->exists();
     }
 }

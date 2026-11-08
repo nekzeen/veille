@@ -150,6 +150,40 @@ php artisan config:cache
 **Arrêt si** : non-réception — vérifier `veille_alerts`, `laravel.log`,
 Postfix, SPF/DKIM avant toute nouvelle tentative.
 
+## Étape 10 — Retrait automatique du catalogue (M13.3b) 🔒🔒
+
+Tâche planifiée `catalogue:reconcile-activity --execute --scheduled`,
+quotidienne à 03:15 (Europe/Paris), `withoutOverlapping(60)`, portée par
+le `schedule:run` existant (aucun nouveau cron). **Désactivée par
+défaut** : sans configuration, le scheduler ne la lance pas et la
+commande refuse toute écriture en mode `--scheduled`.
+
+Conditions préalables, toutes requises :
+
+1. migrations `000008` (thématiques) et `000009`
+   (`catalogue_inactive_at`) appliquées après sauvegarde (étape 5) ;
+2. dry-run manuel examiné avec Gaël :
+   `php artisan catalogue:reconcile-activity` (aucune écriture) ;
+3. premier passage manuel si validé :
+   `php artisan catalogue:reconcile-activity --execute --force`
+   (saisie interactive du nom exact de la base). Il pose seulement les
+   marqueurs : aucune source n'est retirée avant 90 jours de marquage ;
+4. activation explicite dans `.env`, puis `php artisan config:cache` :
+
+```bash
+CATALOGUE_SCHEDULED_EXECUTE=true
+CATALOGUE_SCHEDULED_DATABASE=veille_db   # nom EXACT de la base connectée
+```
+
+Le mode `--scheduled` n'écrit que si `CATALOGUE_SCHEDULED_EXECUTE`
+vaut `true` **et** que `CATALOGUE_SCHEDULED_DATABASE` est identique à
+`DB::connection()->getDatabaseName()`. Il est incompatible avec
+`--force`. Le retrait passe seulement `is_catalogue` à false ; aucune
+suppression n'a lieu.
+
+**Désactivation** : `CATALOGUE_SCHEDULED_EXECUTE=false` (ou retirer la
+variable) puis `php artisan config:cache`.
+
 ## Retour arrière par couche
 
 | Échec à | Action |

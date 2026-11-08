@@ -33,6 +33,11 @@ class AlertConcurrencyTest extends TestCase
     /** @var list<int> */
     private array $veilleIds = [];
 
+    /** Repères d'ids relevés en setUp : tout ce qui est créé au-delà est nettoyé. */
+    private int $maxArticleId = 0;
+
+    private int $maxSourceId = 0;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -47,6 +52,8 @@ class AlertConcurrencyTest extends TestCase
         DB::statement('SET innodb_lock_wait_timeout = 1');
         $this->aux()->statement('SET innodb_lock_wait_timeout = 1');
 
+        $this->maxArticleId = (int) DB::table('articles')->max('id');
+        $this->maxSourceId = (int) DB::table('sources')->max('id');
         $this->user = User::factory()->create();
     }
 
@@ -69,6 +76,13 @@ class AlertConcurrencyTest extends TestCase
             DB::table('veilles')->where('id', $id)->delete();
         }
         $this->user?->delete();
+        // Articles et sources factory commités hors transaction : sans
+        // ce nettoyage ils persistaient dans veille_test et faussaient
+        // les tests suivants de la suite MariaDB complète.
+        if (DB::connection()->getDriverName() === 'mariadb') {
+            DB::table('articles')->where('id', '>', $this->maxArticleId)->delete();
+            DB::table('sources')->where('id', '>', $this->maxSourceId)->delete();
+        }
         DB::purge('mariadb_aux');
         parent::tearDown();
     }

@@ -28,7 +28,8 @@ class SourceSubscriptionService
      * la configuration HTML éventuelle est filtrée puis appliquée.
      *
      * @param  array<string, mixed>|null  $htmlConfig
-     * @return array{0: Source, 1: UserSource, 2: DetectionResult}
+     * @return array{0: Source, 1: UserSource, 2: DetectionResult, 3: bool}
+     *                                                                      3 = republiée (M13.3b)
      *
      * @throws SourceNotCollectableException détection en échec ou
      *                                       page HTML sans article extractible
@@ -105,18 +106,29 @@ class SourceSubscriptionService
                 }
             }
 
-            // M13.2c — source existante NON catalogue (privée, autre
-            // utilisateur ou orpheline) : refus générique — aucune
-            // fuite, jamais d'abonnement implicite à une source privée.
-            if (! $source->is_catalogue
-                && ! $source->userSources()->where('user_id', $user->id)->exists()) {
-                throw new SourceNotCollectableException(
-                    DetectionResult::failure('unavailable', $submittedUrl),
-                );
+            $republished = false;
+            if (! $source->wasRecentlyCreated) {
+                // M13.3b — ligne verrouillée : sérialisé avec le retrait.
+                $source = $this->lockSource($source);
+                if ($this->catalogueActivity->isWithdrawn($source)) {
+                    // Retirée du catalogue : le flux vient d'être
+                    // revalidé (détection complète ci-dessus) et la
+                    // thématique est fournie → republication explicite,
+                    // même enregistrement.
+                    $this->catalogueActivity->republish($source, $themeId);
+                    $republished = true;
+                } elseif (! $source->is_catalogue
+                    && ! $source->userSources()->where('user_id', $user->id)->exists()) {
+                    // M13.2c — source privée (autre utilisateur ou
+                    // orpheline) : refus générique, aucune fuite.
+                    throw new SourceNotCollectableException(
+                        DetectionResult::failure('unavailable', $submittedUrl),
+                    );
+                }
             }
 
             // Source existante : jamais d'écrasement de sa configuration.
-            return [$source, $this->firstOrCreateSubscription($user, $source), $detection];
+            return [$source, $this->firstOrCreateSubscription($user, $source), $detection, $republished];
         });
     }
 
@@ -167,12 +179,19 @@ class SourceSubscriptionService
      */
     public function subscribe(User $user, Source $source): UserSource
     {
-        if (! $source->is_catalogue
-            && ! $source->userSources()->where('user_id', $user->id)->exists()) {
-            throw new \RuntimeException('Source non accessible.');
-        }
+        // M13.3b — accès vérifié sous verrou : un retrait concurrent est
+        // soit déjà validé (source privée → refus), soit bloqué jusqu'au
+        // commit de l'abonnement (lien relu → retrait annulé). Une
+        // source retirée n'est jamais republiée par cette voie.
+        return DB::transaction(function () use ($user, $source): UserSource {
+            $locked = $this->lockSource($source);
+            if (! $locked->is_catalogue
+                && ! $locked->userSources()->where('user_id', $user->id)->exists()) {
+                throw new \RuntimeException('Source non accessible.');
+            }
 
-        return $this->firstOrCreateSubscription($user, $source);
+            return $this->firstOrCreateSubscription($user, $locked);
+        });
     }
 
     /**
@@ -222,8 +241,27 @@ class SourceSubscriptionService
                 }
             }
 
+            if (! $source->wasRecentlyCreated) {
+                // M13.3b — même règle que M13.2c, sous verrou : jamais
+                // d'abonnement implicite à une source privée d'autrui
+                // ni à une source retirée (pas de republication ici).
+                $source = $this->lockSource($source);
+                if (! $source->is_catalogue
+                    && ! $source->userSources()->where('user_id', $user->id)->exists()) {
+                    throw new SourceNotCollectableException(
+                        DetectionResult::failure('unavailable', $normalized),
+                    );
+                }
+            }
+
             return [$source, $this->firstOrCreateSubscription($user, $source)];
         });
+    }
+
+    /** Relit la source verrouillée FOR UPDATE (sérialisation M13.3b). */
+    private function lockSource(Source $source): Source
+    {
+        return Source::whereKey($source->id)->lockForUpdate()->firstOrFail();
     }
 
     /**

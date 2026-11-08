@@ -87,8 +87,9 @@ class FeedCollectorScheduleTest extends TestCase
 
     public function test_only_the_expected_tasks_are_scheduled(): void
     {
-        // feeds:fetch, queue:work, alerts:generate/distribute/sweep.
-        $this->assertCount(5, $this->scheduledEvents());
+        // feeds:fetch, queue:work, alerts:generate/distribute/sweep,
+        // catalogue:reconcile-activity (M13.3b, conditionnelle).
+        $this->assertCount(6, $this->scheduledEvents());
     }
 
     public function test_schedule_list_shows_both_tasks(): void

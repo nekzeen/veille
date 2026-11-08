@@ -88,9 +88,10 @@ class SourcesTest extends TestCase
 
     public function test_personal_source_reuses_existing_technical_source(): void
     {
+        // M13.3b : seule une source du catalogue est réutilisable par URL.
         $existing = Source::factory()->create([
             'feed_url' => 'https://example.com/feed',
-            'is_catalogue' => false,
+            'is_catalogue' => true,
         ]);
         $user = User::factory()->create();
 
@@ -102,6 +103,26 @@ class SourcesTest extends TestCase
             'user_id' => $user->id,
             'source_id' => $existing->id,
         ]);
+    }
+
+    public function test_personal_source_private_of_another_is_refused(): void
+    {
+        // M13.3b — trou d'isolation fermé : une source privée n'est
+        // jamais rattachée par simple connaissance de son URL.
+        $existing = Source::factory()->create([
+            'feed_url' => 'https://example.com/feed',
+            'is_catalogue' => false,
+        ]);
+        UserSource::create(['user_id' => User::factory()->create()->id,
+            'source_id' => $existing->id, 'created_at' => now()]);
+        $user = User::factory()->create();
+
+        $this->actingAs($user)
+            ->post(route('sources.personal'), ['feed_url' => 'https://example.com/feed'])
+            ->assertSessionHasErrors(['feed_url' => 'Cette URL ne peut pas être ajoutée.']);
+
+        $this->assertSame(1, Source::count());
+        $this->assertDatabaseMissing('user_sources', ['user_id' => $user->id]);
     }
 
     public function test_no_duplicate_subscription(): void

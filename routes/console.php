@@ -24,3 +24,13 @@ Schedule::command('queue:work --stop-when-empty --max-time=50')->everyMinute()->
 Schedule::command('alerts:generate')->dailyAt('06:30')->timezone('Europe/Paris')->withoutOverlapping(15);
 Schedule::command('alerts:distribute')->everyFiveMinutes()->withoutOverlapping(5);
 Schedule::command('alerts:sweep')->everyTenMinutes()->withoutOverlapping(10);
+
+// Catalogue (M13.3b) : marquage d'inactivité + retrait après 90 jours,
+// quotidien à 03:15 Paris. DÉSACTIVÉ par défaut : planifié seulement si
+// CATALOGUE_SCHEDULED_EXECUTE=true ; la commande revérifie en outre que
+// la base connectée est exactement CATALOGUE_SCHEDULED_DATABASE
+// (jamais --force). withoutOverlapping : un seul traitement à la fois.
+Schedule::command('catalogue:reconcile-activity --execute --scheduled')
+    ->dailyAt('03:15')->timezone('Europe/Paris')
+    ->withoutOverlapping(60)
+    ->when(fn (): bool => config('catalogue.scheduled.enabled') === true);

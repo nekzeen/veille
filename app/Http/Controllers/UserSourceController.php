@@ -53,10 +53,14 @@ class UserSourceController extends Controller
     /** Ajout d'une source personnelle par URL de flux. */
     public function storePersonal(StorePersonalSourceRequest $request): RedirectResponse
     {
-        [$source] = $this->service->addPersonalSource(
-            $request->user(),
-            (string) $request->validated('feed_url'),
-        );
+        try {
+            [$source] = $this->service->addPersonalSource(
+                $request->user(),
+                (string) $request->validated('feed_url'),
+            );
+        } catch (SourceNotCollectableException $e) {
+            return back()->withInput()->withErrors(['feed_url' => $e->getMessage()]);
+        }
 
         return redirect()->route('sources.index')
             ->with('status', "Source « {$source->name} » ajoutée.");
@@ -74,7 +78,7 @@ class UserSourceController extends Controller
         $request->validate(['theme_id' => 'required|integer|exists:source_themes,id']);
 
         try {
-            [$source, $subscription, $detection] = $this->service->addDetectedSource(
+            [$source, $subscription, $detection, $republished] = $this->service->addDetectedSource(
                 $request->user(),
                 (string) $request->validated('url'),
                 $request->htmlConfig(),
@@ -92,6 +96,7 @@ class UserSourceController extends Controller
         // M13.2c — distinguer création / réutilisation / déjà suivie.
         [$outcome, $message] = match (true) {
             $source->wasRecentlyCreated => ['created', "Source « {$source->name} » créée et publiée au catalogue."],
+            $republished => ['republished', "Source « {$source->name} » revalidée et republiée au catalogue — abonnement ajouté."],
             $subscription->wasRecentlyCreated => ['reused', "Source « {$source->name} » déjà dans le catalogue — abonnement ajouté."],
             default => ['already_subscribed', "Vous suivez déjà « {$source->name} » — rien de nouveau créé."],
         };
