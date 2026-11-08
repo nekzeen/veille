@@ -54,7 +54,13 @@
                 </span>
                 <p class="text-sm text-gray-600">
                     {{ $collecte['sources_actives'] }} source(s) active(s) ·
-                    {{ $enErreur }} en erreur ·
+                    @if ($enErreur > 0)
+                        <a href="{{ route('sources.index', ['error' => 1]) }}"
+                           class="font-medium text-red-700 underline decoration-dotted hover:text-red-800">{{ $enErreur }} en erreur</a>
+                    @else
+                        {{ $enErreur }} en erreur
+                    @endif
+                    ·
                     Dernière collecte réussie :
                     <span class="font-medium text-gray-800">{{ $collecte['derniere_collecte'] ?? '—' }}</span>
                 </p>

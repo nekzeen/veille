@@ -21,13 +21,16 @@ class UserSourceController extends Controller
     /** « Mes sources » : abonnements personnels de l'utilisateur. */
     public function index(Request $request): View
     {
+        $showErrors = $request->query('error') === '1';
         $subscriptions = $request->user()
             ->userSources()
             ->with('source')
+            ->when($showErrors, fn ($q) => $q->whereHas('source',
+                fn ($s) => $s->where('fail_count', '>', 0)))
             ->orderByDesc('created_at')
             ->get();
 
-        return view('sources.index', compact('subscriptions'));
+        return view('sources.index', compact('subscriptions', 'showErrors'));
     }
 
     /** Abonnement à une source existante (catalogue ou déjà enregistrée). */

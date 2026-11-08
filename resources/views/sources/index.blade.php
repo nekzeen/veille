@@ -11,6 +11,12 @@
             @if (session('status'))
                 <div class="p-4 bg-green-100 text-green-800 rounded-md">{{ session('status') }}</div>
             @endif
+            @if ($showErrors ?? false)
+                <div class="p-4 bg-red-50 text-red-800 rounded-md flex justify-between items-center">
+                    <span>Sources en erreur uniquement ({{ $subscriptions->count() }})</span>
+                    <a href="{{ route('sources.index') }}" class="underline text-sm">Voir toutes mes sources</a>
+                </div>
+            @endif
 
             <div class="bg-white overflow-hidden shadow sm:rounded-lg border border-slate-300"
                  x-data="sourceAdder">
@@ -154,6 +160,23 @@
                                             {{ $subscription->source->is_catalogue ? 'Catalogue' : 'Personnelle' }}
                                             — abonné le {{ $subscription->created_at?->format('d/m/Y') }}
                                         </p>
+                                        @if ($subscription->source->fail_count > 0)
+                                            <div class="mt-2 text-xs border-l-2 border-red-200 bg-red-50 rounded-r px-3 py-2 space-y-0.5">
+                                                <p class="font-medium text-red-700">
+                                                    {{ ! $subscription->source->is_active ? 'Source désactivée (échecs répétés)' : ($subscription->source->fail_count > 1 ? 'Erreur récurrente' : 'Erreur ponctuelle') }}
+                                                </p>
+                                                <p class="text-red-600">{{ $subscription->source->last_error ?? 'Motif non enregistré' }}</p>
+                                                <p class="text-gray-500">
+                                                    Échecs consécutifs : {{ $subscription->source->fail_count }} ·
+                                                    Dernière tentative : {{ $subscription->source->last_fetched_at?->format('d/m/Y H:i') ?? '—' }} ·
+                                                    Dernier succès : {{ $subscription->source->last_success_at?->format('d/m/Y H:i') ?? '—' }}
+                                                </p>
+
+                                                @if (! $subscription->source->is_active)
+
+                                                @endif
+                                            </div>
+                                        @endif
                                     </div>
                                     <div class="shrink-0">
                                         <form method="POST" action="{{ route('sources.unsubscribe', $subscription) }}"
