@@ -66,6 +66,8 @@ Route::middleware('auth')->group(function () {
             ->name('veilles.articles.index');
         Route::get('/veilles/{veille}/articles/{article}', [VeilleArticleController::class, 'show'])
             ->name('veilles.articles.show');
+        Route::post('/veilles/{veille}/articles/read-all', [VeilleArticleController::class, 'markAllRead'])
+            ->name('veilles.articles.read-all');
         Route::put('/veilles/{veille}/articles/{article}/read', [VeilleArticleController::class, 'markRead'])
             ->name('veilles.articles.read');
         Route::delete('/veilles/{veille}/articles/{article}/read', [VeilleArticleController::class, 'markUnread'])

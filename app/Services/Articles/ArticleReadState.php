@@ -5,7 +5,9 @@ namespace App\Services\Articles;
 use App\Models\Article;
 use App\Models\ArticleUser;
 use App\Models\User;
+use App\Models\Veille;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * État de lecture personnel d'un article (DataModel §3.9).
@@ -17,6 +19,48 @@ use Illuminate\Support\Collection;
  */
 final class ArticleReadState
 {
+    public function __construct(
+        private VeilleArticleQuery $articles,
+    ) {}
+
+    /**
+     * « Tout marquer lu » (M11.4) : upsert `article_user` par lots de
+     * 500 sur le périmètre non lu de la veille (rétention 6 mois +
+     * exclusions M9, via `VeilleArticleQuery::unreadQuery`).
+     * `upsert` ne met à jour que `is_read`/`updated_at` — favoris,
+     * archives, notes et catégories sont préservés. Transaction unique
+     * : en cas d'échec, rien n'est partiellement écrit.
+     *
+     * @return int nombre de lignes article_user écrites
+     */
+    public function markAllRead(User $user, Veille $veille): int
+    {
+        $written = 0;
+        DB::transaction(function () use (&$written, $user, $veille): void {
+            $now = now('UTC');
+            $this->articles->unreadQuery($veille)
+                ->lazy(500)
+                ->chunk(500)
+                ->each(function ($batch) use (&$written, $user, $now): void {
+                    $rows = $batch->map(fn (Article $a): array => [
+                        'user_id' => $user->id,
+                        'article_id' => $a->id,
+                        'is_read' => true,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ])->all();
+                    if ($rows !== []) {
+                        DB::table('article_user')->upsert(
+                            $rows, ['user_id', 'article_id'], ['is_read', 'updated_at'],
+                        );
+                        $written += count($rows);
+                    }
+                });
+        });
+
+        return $written;
+    }
+
     /** Non lu si pas de ligne ou `is_read` faux. */
     public function isRead(User $user, Article $article): bool
     {

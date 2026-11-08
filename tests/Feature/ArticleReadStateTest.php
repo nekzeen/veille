@@ -146,7 +146,7 @@ class ArticleReadStateTest extends TestCase
         $article = $this->match($veille);
         $this->actingAs($user)->put($this->readUrl($veille, $article));
 
-        $this->actingAs($user)->get(route('veilles.articles.index', $veille))
+        $this->actingAs($user)->get(route('veilles.articles.index', [$veille, 'state' => 'all']))
             ->assertSee('>Lu<', false);
         $this->actingAs($user)->get(route('veilles.articles.show', [$veille, $article]))
             ->assertSee('>Lu<', false)->assertSee('Marquer non lu');

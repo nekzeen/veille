@@ -43,16 +43,36 @@ final class DashboardController extends Controller
 
         $veilles->each(fn (Veille $v) => $v->setAttribute('unread_count', (int) ($unreadPerVeille[$v->id] ?? 0)));
 
+        // Indicateur global : articles DISTINCTS non lus (un article
+        // dans plusieurs veilles ne compte qu'une fois — M11.3).
+        $articlesNonLus = ArticleVeille::query()
+            ->leftJoin('article_user', function ($j) use ($uid): void {
+                $j->on('article_user.article_id', '=', 'article_veille.article_id')
+                    ->where('article_user.user_id', '=', $uid);
+            })
+            ->where('article_veille.user_id', $uid)
+            ->where(fn ($q) => ArticleVisibility::apply($q, $uid, 'article_veille.article_id'))
+            ->where(fn ($q) => $q->whereNull('article_user.is_read')->orWhere('article_user.is_read', false))
+            ->distinct()
+            ->count('article_veille.article_id');
+
         $stats = [
             'veilles_actives' => $veilles->where('is_active', true)->count(),
             'articles_total' => $veilles->sum('article_veilles_count'),
-            'articles_non_lus' => $unreadPerVeille->values()->sum(),
+            'articles_non_lus' => $articlesNonLus,
         ];
 
-        // Derniers articles détectés, toutes veilles confondues.
+        // Derniers articles NON LUS détectés, toutes veilles confondues
+        // (M11.3) : un article lu disparaît de cette sélection.
         $recents = ArticleVeille::query()
+            ->leftJoin('article_user', function ($j) use ($uid): void {
+                $j->on('article_user.article_id', '=', 'article_veille.article_id')
+                    ->where('article_user.user_id', '=', $uid);
+            })
             ->where('article_veille.user_id', $uid)
             ->where(fn ($q) => ArticleVisibility::apply($q, $uid, 'article_veille.article_id'))
+            ->where(fn ($q) => $q->whereNull('article_user.is_read')->orWhere('article_user.is_read', false))
+            ->select('article_veille.*')
             ->with(['article.source:id,name,site_url', 'veille:id,name'])
             ->orderByDesc('article_veille.id')
             ->limit(10)

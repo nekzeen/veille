@@ -60,7 +60,7 @@ final class VeilleArticleQuery
      *
      * @return BelongsToMany<Article, Veille>
      */
-    private function filtered(Veille $veille, ?int $sourceId, ?string $keyword): BelongsToMany
+    private function filtered(Veille $veille, ?int $sourceId, ?string $keyword, string $state = 'all'): BelongsToMany
     {
         $query = $this->base($veille);
         if ($sourceId !== null) {
@@ -70,13 +70,30 @@ final class VeilleArticleQuery
             $query->wherePivot('matched_keyword', $keyword);
         }
 
+        // Filtre de lecture (M11.2) — statut GLOBAL par (user, article)
+        // via LEFT JOIN article_user, même pattern que les compteurs
+        // dashboard : indexé, sans N+1. Par défaut 'all' (navigation
+        // prev/next inchangée).
+        if ($state === 'unread' || $state === 'read') {
+            $query->leftJoin('article_user', function ($join) use ($veille): void {
+                $join->on('article_user.article_id', '=', 'articles.id')
+                    ->where('article_user.user_id', '=', $veille->user_id);
+            });
+            if ($state === 'unread') {
+                $query->where(fn ($q) => $q->whereNull('article_user.is_read')
+                    ->orWhere('article_user.is_read', false));
+            } else {
+                $query->where('article_user.is_read', true);
+            }
+        }
+
         return $query;
     }
 
     /** Liste paginée — tri stable portable. Les paramètres d'URL validés sont ajoutés par le contrôleur (`appends`). */
-    public function paginate(Veille $veille, ?int $sourceId, ?string $keyword): LengthAwarePaginator
+    public function paginate(Veille $veille, ?int $sourceId, ?string $keyword, string $state = 'unread'): LengthAwarePaginator
     {
-        return $this->filtered($veille, $sourceId, $keyword)
+        return $this->filtered($veille, $sourceId, $keyword, $state)
             ->orderByRaw(self::EFFECTIVE_DATE.' DESC')
             ->orderByDesc('articles.id')
             ->paginate(self::PER_PAGE);
@@ -87,6 +104,18 @@ final class VeilleArticleQuery
      * associé, rattaché à un autre utilisateur (pivot `user_id`) ou
      * hors rétention : le contrôleur rend 404 (jamais 403).
      */
+    /**
+     * Articles NON LUS de la veille, périmètre complet : rétention 6
+     * mois + exclusions M9 + non-archivés (hérité de `base()`), statut
+     * global (user_id, article_id). Utilisé par « Tout marquer lu ».
+     *
+     * @return BelongsToMany<Article, Veille>
+     */
+    public function unreadQuery(Veille $veille): BelongsToMany
+    {
+        return $this->filtered($veille, null, null, 'unread');
+    }
+
     public function findArticle(Veille $veille, int $articleId): ?Article
     {
         return $this->base($veille)

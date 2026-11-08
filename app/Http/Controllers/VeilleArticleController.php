@@ -44,7 +44,7 @@ class VeilleArticleController extends Controller
         $params = self::navParams($request);
 
         $paginator = $this->articles
-            ->paginate($veille, $params['source_id'] ?? null, $params['keyword'] ?? null)
+            ->paginate($veille, $params['source_id'] ?? null, $params['keyword'] ?? null, $params['state'])
             // `page` n'est jamais appensé : il figerait tous les liens.
             ->appends(array_diff_key($params, ['page' => true]));
 
@@ -110,6 +110,22 @@ class VeilleArticleController extends Controller
     {
         return $this->mutateArticle($request, $veille, $article,
             fn ($user, $a) => $this->readStates->markRead($user, $a));
+    }
+
+    /**
+     * « Tout marquer lu » — POST (M11.4). Périmètre : tous les non lus
+     * de la veille (rétention 6 mois + exclusions M9) ; statut global
+     * (user_id, article_id). Retour vers l'onglet Non lus.
+     */
+    public function markAllRead(Request $request, Veille $veille): RedirectResponse
+    {
+        Gate::authorize('view', $veille);
+
+        $count = $this->readStates->markAllRead($request->user(), $veille);
+
+        return redirect()
+            ->route('veilles.articles.index', [$veille, 'state' => 'unread'])
+            ->with('status', $count.' article(s) marqué(s) comme lu(s) — changement global pour votre compte.');
     }
 
     /** Marquer non lu — DELETE. Ligne supprimée si rien d'autre à conserver. */
@@ -240,6 +256,9 @@ class VeilleArticleController extends Controller
                     ? mb_substr($k, 0, 255)
                     : null,
             'page' => $positiveInt($raw['page'] ?? null),
+            'state' => in_array($raw['state'] ?? null, ['unread', 'all', 'read'], true)
+                ? $raw['state']
+                : 'unread',
         ], static fn ($v) => $v !== null);
     }
 }

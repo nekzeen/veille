@@ -16,8 +16,38 @@
 
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6">
+                    @php
+                        $tab = fn (string $s): string => route('veilles.articles.index', [$veille] + array_filter([
+                            'state' => $s,
+                            'source_id' => $params['source_id'] ?? null,
+                            'keyword' => $params['keyword'] ?? null,
+                        ]));
+                    @endphp
+                    <div class="mb-4 flex flex-wrap gap-1">
+                        <a href="{{ $tab('unread') }}"
+                           class="rounded-md px-3 py-1.5 text-sm font-medium {{ ($params['state'] ?? 'unread') === 'unread' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100' }}">Non lus</a>
+                        <a href="{{ $tab('all') }}"
+                           class="rounded-md px-3 py-1.5 text-sm font-medium {{ ($params['state'] ?? 'unread') === 'all' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100' }}">Tous</a>
+                        <a href="{{ $tab('read') }}"
+                           class="rounded-md px-3 py-1.5 text-sm font-medium {{ ($params['state'] ?? 'unread') === 'read' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100' }}">Lus</a>
+                    </div>
+
+                    @if (session('status'))
+                        <p class="mb-3 text-sm text-emerald-700 bg-emerald-50 rounded-md px-3 py-2">{{ session('status') }}</p>
+                    @endif
+                    <form method="POST" action="{{ route('veilles.articles.read-all', $veille) }}"
+                          class="mb-4"
+                          onsubmit="return confirm('Marquer TOUS les articles non lus de cette veille comme lus ? Ce changement est global : ils deviendront lus dans toutes vos veilles.');">
+                        @csrf
+                        <button type="submit"
+                                class="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">
+                            Tout marquer comme lu
+                        </button>
+                    </form>
+
                     <form method="GET" action="{{ route('veilles.articles.index', $veille) }}"
                           class="flex flex-wrap items-end gap-4">
+                        <input type="hidden" name="state" value="{{ $params['state'] ?? 'unread' }}">
                         <div>
                             <label for="source_id" class="block text-sm font-medium text-gray-700">Source</label>
                             <select id="source_id" name="source_id"
@@ -108,6 +138,7 @@
                                                 {{ ($favMap[$article->id] ?? false) ? 'Retirer le favori' : 'Ajouter aux favoris' }}
                                             </button>
                                         </form>
+
                                     </p>
                                     @if ($article->summary !== null && $article->summary !== '')
                                         <p class="mt-1 text-sm text-gray-600">{{ Str::limit(strip_tags($article->summary), 200) }}</p>
