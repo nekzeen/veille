@@ -15,7 +15,10 @@ use Illuminate\Support\Facades\Schema;
 
 class SourceSubscriptionService
 {
-    public function __construct(private readonly SourceDetector $detector) {}
+    public function __construct(
+        private readonly SourceDetector $detector,
+        private readonly SourceLifecycleService $lifecycle,
+    ) {}
 
     /**
      * Ajout d'une source personnelle via la détection (M8.5) : le
@@ -240,12 +243,7 @@ class SourceSubscriptionService
      */
     private function refreshOrphanFlag(Source $source): void
     {
-        $orphan = ! $source->is_catalogue
-            && ! $source->userSources()->exists()
-            && ! DB::table('source_veille')->where('source_id', $source->id)->exists()
-            && ! DB::table('articles')->where('source_id', $source->id)->exists();
-
-        $source->update(['orphaned_at' => $orphan ? now('UTC') : null]);
+        $this->lifecycle->reevaluate($source);
     }
 
     /**

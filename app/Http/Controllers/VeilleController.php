@@ -8,6 +8,7 @@ use App\Models\Source;
 use App\Models\User;
 use App\Models\UserSource;
 use App\Models\Veille;
+use App\Services\SourceLifecycleService;
 use App\Services\VeilleService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Collection;
@@ -17,7 +18,10 @@ use Illuminate\Support\Facades\Gate;
 
 class VeilleController extends Controller
 {
-    public function __construct(private readonly VeilleService $veilles) {}
+    public function __construct(
+        private readonly VeilleService $veilles,
+        private readonly SourceLifecycleService $lifecycle,
+    ) {}
 
     /** « Mes veilles » : uniquement celles de l'utilisateur connecté. */
     public function index(Request $request): View
@@ -95,7 +99,11 @@ class VeilleController extends Controller
     {
         Gate::authorize('delete', $veille);
 
+        // M13.1a — cascade `source_veille` : capturer les sources avant,
+        // recalculer `orphaned_at` après la suppression effective.
+        $sourceIds = $this->lifecycle->sourceIdsForVeille($veille->id);
         $this->veilles->delete($veille);
+        $this->lifecycle->reevaluate($sourceIds);
 
         return redirect()->route('veilles.index')
             ->with('status', "Veille « {$veille->name} » supprimée.");

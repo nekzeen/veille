@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\ProfileUpdateRequest;
+use App\Services\SourceLifecycleService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -56,8 +57,11 @@ class ProfileController extends Controller
         // `sessions` (sans cascade) et `digest_drafts` sont purgés
         // explicitement dans la même transaction.
         DB::transaction(function () use ($user): void {
+            $sourceIds = app(SourceLifecycleService::class)
+                ->sourceIdsForUser($user->id);
             DB::table('sessions')->where('user_id', $user->id)->delete();
             $user->delete();
+            app(SourceLifecycleService::class)->reevaluate($sourceIds);
         });
 
         $request->session()->invalidate();

@@ -6,6 +6,7 @@ namespace App\Console\Commands;
 
 use App\Models\Article;
 use App\Models\ArticleVeille;
+use App\Services\SourceLifecycleService;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -109,9 +110,15 @@ class ArticlesPurgeCommand extends Command
                 ->each(function ($ids) use (&$purged, $cutoff, $grace): void {
                     DB::transaction(function () use ($ids, &$purged, $cutoff, $grace): void {
                         // Revérification atomique dans la transaction.
+                        // M13.1a — sources des articles réellement supprimés :
+                        // recalcul `orphaned_at` après le dernier article.
+                        $sourceIds = Article::whereIn('id', $ids)
+                            ->whereRaw($this->eligibilitySql(), [$cutoff, $grace])
+                            ->pluck('source_id');
                         $purged += Article::whereIn('id', $ids)
                             ->whereRaw($this->eligibilitySql(), [$cutoff, $grace])
                             ->delete();
+                        app(SourceLifecycleService::class)->reevaluate($sourceIds);
                     });
                 });
         }
