@@ -68,6 +68,53 @@ class SharesTest extends TestCase
         ])->assertSessionHasErrors('expires_at');
     }
 
+    public function test_creation_globale_payload_reel_du_formulaire(): void
+    {
+        [$u] = $this->userVeille();
+        // Payload exact envoyé quand le select masqué transmettait ''.
+        $r = $this->actingAs($u)->post('/shares', [
+            'scope' => 'all', 'veille_id' => '', 'label' => '', 'expires_at' => '',
+        ]);
+        $r->assertSessionDoesntHaveErrors();
+        $r->assertSessionHas('share_link');
+        $share = VeilleShare::first();
+        $this->assertSame('all', $share->scope);
+        $this->assertNull($share->veille_id);
+        $this->assertNull($share->label);
+        $this->assertNull($share->expires_at);
+    }
+
+    public function test_creation_globale_avec_label_et_expiration(): void
+    {
+        [$u] = $this->userVeille();
+        $this->actingAs($u)->post('/shares', [
+            'scope' => 'all', 'label' => 'Conseil',
+            'expires_at' => now('UTC')->addDays(30)->toDateString(),
+        ])->assertSessionDoesntHaveErrors();
+        $share = VeilleShare::sole();
+        $this->assertSame('Conseil', $share->label);
+        $this->assertNotNull($share->expires_at);
+    }
+
+    public function test_single_requiert_veille_propre_et_erreur_en_francais(): void
+    {
+        [$u, $v] = $this->userVeille();
+        // Sans veille → message français, pas de clé brute.
+        $r = $this->actingAs($u)->post('/shares', ['scope' => 'single']);
+        $r->assertSessionHasErrors('veille_id');
+        $this->assertStringContainsString(
+            'Choisissez une veille',
+            session('errors')->first('veille_id'),
+        );
+        // veille_id non numérique → message compréhensible aussi.
+        $this->actingAs($u)->post('/shares', ['scope' => 'single', 'veille_id' => 'abc'])
+            ->assertSessionHasErrors('veille_id');
+        $this->assertStringNotContainsString(
+            'validation.integer',
+            session('errors')->first('veille_id'),
+        );
+    }
+
     public function test_isolation_update_rotate_destroy_404(): void
     {
         [$u, $v] = $this->userVeille();
