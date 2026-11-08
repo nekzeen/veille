@@ -40,7 +40,7 @@ final class FetchFeedsCommand extends Command
             // de Source — la règle n'est pas dupliquée ici.
             foreach (Source::query()
                 ->where('is_active', true)
-                ->whereNull('orphaned_at')
+                ->where('catalogue_state', 'active')
                 ->lazyById(self::CHUNK_SIZE) as $source) {
                 $examined++;
 
