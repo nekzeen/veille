@@ -7,9 +7,9 @@
 
         <title>{{ config('app.name', 'Laravel') }}</title>
 
-        <!-- Fonts -->
 
         <!-- Scripts -->
+        <link rel="icon" type="image/svg+xml" href="{{ asset('images/favicon.svg') }}">
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
     <body class="font-sans text-gray-900 antialiased">
@@ -23,6 +23,11 @@
             <div class="w-full sm:max-w-md mt-6 px-6 py-4 bg-white shadow-md overflow-hidden sm:rounded-lg">
                 {{ $slot }}
             </div>
+            <p class="mt-6 text-xs text-gray-500">
+                <a class="underline hover:text-gray-700" href="{{ route('terms') }}">Conditions d'utilisation</a>
+                ·
+                <a class="underline hover:text-gray-700" href="{{ route('privacy') }}">Politique de confidentialité</a>
+            </p>
         </div>
     </body>
 </html>

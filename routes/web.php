@@ -21,6 +21,12 @@ Route::get('/', function () {
     return view('welcome');
 });
 
+// Pages légales publiques (M12.15) — version affichée, contenu provisoire.
+Route::get('/terms', fn () => view('pages.terms', ['version' => config('legal.terms_version')]))
+    ->name('terms');
+Route::get('/privacy', fn () => view('pages.privacy', ['version' => config('legal.privacy_version')]))
+    ->name('privacy');
+
 Route::get('/dashboard', [DashboardController::class, 'index'])
     ->middleware(['auth', 'verified'])->name('dashboard');
 
