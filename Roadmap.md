@@ -174,3 +174,8 @@ M1 (socle) → M2 (sources) → M3 (veilles) → M4 (lecture) → M5 (alertes)
 Le partage et l'API ne peuvent être envisagés qu'après M4.
 - M9.1–M9.5 : exclusions personnelles (CRUD + matcher + pipeline + rétroactif + docs) livrées — voir M9_Conception_Exclusions.md et DataModel §13.
 - M10.1–M10.5 : partage privé des veilles (jetons hashés, gestion propriétaire, consultation publique lecture seule, audit sécurité) — voir M10_Conception_Partage.md.
+- M11.1 : audit lecture globale — statut déjà par (user,article) dans article_user ; chantier = filtres UI + tout-marquer (docs/M11_Lecture_Design.md), aucune migration de données.
+- M12.3 : conception RGPD — docs/M12_Legal_Design.md (consentement non persisté aujourd'hui ; proposition 3 colonnes users + pages /terms /privacy /legal ; contenus juridiques = à fournir).
+- M12.5 : audit technique juridique final — docs/M12_Legal_Final_Audit.md (faits démontrés : Bunny Fonts = seule ressource tierce, OVH hébergeur, sessions 120min, rétention articles 6mo/persistantes, suppression compte à concevoir ; contenus = à fournir).
+- M12.8.1 : exception temporaire des ~10 sauvegardes manuelles backups/veille/ — durée indéfinie, réexamen requis AVANT publication de /privacy (décision en attente).
+- M12.10 : conception rétention/purge articles — docs/M12_Article_Retention_Design.md (2 étapes : retrait article_veille >6mo sûr + purge catalogue avec garde favoris/notes ; décisions §6 en attente).
