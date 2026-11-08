@@ -32,7 +32,7 @@ class SourceSubscriptionService
      * @throws SourceNotCollectableException détection en échec ou
      *                                       page HTML sans article extractible
      */
-    public function addDetectedSource(User $user, string $submittedUrl, ?array $htmlConfig = null, ?int $themeId = null): array
+    public function addDetectedSource(User $user, string $submittedUrl, ?array $htmlConfig, int $themeId): array
     {
         $submittedUrl = trim($submittedUrl);
         $config = self::sanitizeHtmlConfig($htmlConfig);
